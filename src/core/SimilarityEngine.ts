@@ -103,8 +103,9 @@ export class SimilarityEngine {
   }
 
   private findHnsw(queryEmbedding: number[]): string | null {
-    if (this.nextLabel === 0) return null
+    if (this.keyToLabel.size === 0) return null
     const result = this.getHnsw().searchKnn(queryEmbedding, HNSW_TOP_K)
+    if (!result.neighbors.length) return null
     const label = result.neighbors[0]
     // HNSW cosine distance = 1 - similarity
     const similarity = 1 - result.distances[0]

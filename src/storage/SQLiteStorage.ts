@@ -1,14 +1,13 @@
 import type { Database } from 'better-sqlite3'
 import type { CacheEntry, IStorage } from './IStorage'
+import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from './IStorage'
+import { DEFAULT_SQLITE_PATH, DEFAULT_TABLE_NAME } from '../constants'
 
 export interface SQLiteStorageOptions {
   path?: string
   db?: Database
   tableName?: string
 }
-
-const DEFAULT_DB_PATH = 'llm-cache.db'
-const DEFAULT_TABLE_NAME = 'llm_cache'
 
 export class SQLiteStorage implements IStorage {
   private db: Database
@@ -20,7 +19,7 @@ export class SQLiteStorage implements IStorage {
     } else {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const BetterSqlite3 = require('better-sqlite3') as typeof import('better-sqlite3')
-      this.db = new BetterSqlite3(opts.path ?? DEFAULT_DB_PATH)
+      this.db = new BetterSqlite3(opts.path ?? DEFAULT_SQLITE_PATH)
     }
     const tableName = opts.tableName ?? DEFAULT_TABLE_NAME
     if (!/^\w+$/.test(tableName)) throw new Error(`Invalid tableName: "${tableName}". Use only letters, digits, and underscores.`)
@@ -50,7 +49,9 @@ export class SQLiteStorage implements IStorage {
       return null
     }
 
-    return JSON.parse(row.value) as CacheEntry
+    const entry = JSON.parse(row.value) as CacheEntry
+    if (entry.type !== ENTRY_TYPE_FULL && entry.type !== ENTRY_TYPE_STREAM) return null
+    return entry
   }
 
   async set(key: string, entry: CacheEntry): Promise<void> {

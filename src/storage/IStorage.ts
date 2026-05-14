@@ -1,6 +1,9 @@
+export const ENTRY_TYPE_FULL = 'full' as const
+export const ENTRY_TYPE_STREAM = 'stream' as const
+
 export interface CacheEntry {
   key: string
-  type: 'full' | 'stream'
+  type: typeof ENTRY_TYPE_FULL | typeof ENTRY_TYPE_STREAM
   value: unknown
   chunks?: unknown[]
   createdAt: number

@@ -1,19 +1,36 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'fs'
+import { FILE_ENCODING, DEFAULT_FILE_PATH, DEFAULT_SQLITE_PATH, DEFAULT_TABLE_NAME } from '../constants'
 
-const DEFAULT_STORAGE_TYPE = 'sqlite'
-const SQLITE_TABLE_NAME = 'llm_cache'
-const DEFAULT_SQLITE_PATH = './llm-cache.db'
-const DEFAULT_FILE_PATH = './llm-cache.json'
+const STORAGE_TYPE_SQLITE = 'sqlite'
+const STORAGE_TYPE_FILE = 'file'
+const DEFAULT_STORAGE_TYPE = STORAGE_TYPE_SQLITE
 const DEFAULT_LIST_LIMIT = 20
+
+const CLI_ARG_PREFIX = '--'
+const ARG_PREFIX_LENGTH = CLI_ARG_PREFIX.length
+const ARG_STORAGE = 'storage'
+const ARG_PATH = 'path'
+const ARG_LIMIT = 'limit'
+
+const COMMAND_STATS = 'stats'
+const COMMAND_LIST = 'list'
+const COMMAND_CLEAR = 'clear'
+const COMMAND_HELP = 'help'
+const COMMAND_HELP_FLAG = '--help'
+
+const MSG_CACHE_FILE_NOT_FOUND = 'Cache file not found:'
+const MSG_CACHE_EMPTY = 'Cache is empty.'
+const MSG_STATS_HEADER = '\nCache Statistics'
+const MSG_STATS_DIVIDER = '================'
 
 const [, , command, ...rawArgs] = process.argv
 
 function parseArgs(args: string[]): Record<string, string> {
   const result: Record<string, string> = {}
   for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--') && args[i + 1] && !args[i + 1].startsWith('--')) {
-      result[args[i].slice(2)] = args[i + 1]
+    if (args[i].startsWith(CLI_ARG_PREFIX) && args[i + 1] && !args[i + 1].startsWith(CLI_ARG_PREFIX)) {
+      result[args[i].slice(ARG_PREFIX_LENGTH)] = args[i + 1]
       i++
     }
   }
@@ -42,7 +59,7 @@ Examples:
 }
 
 async function getStorage(type: string, path: string) {
-  if (type === 'file') {
+  if (type === STORAGE_TYPE_FILE) {
     const { FileStorage } = await import('../storage/FileStorage.js')
     return new FileStorage({ path })
   }
@@ -55,9 +72,9 @@ function getSQLiteStats(path: string): { total: number; expired: number } {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Database = require('better-sqlite3') as typeof import('better-sqlite3')
   const db = new Database(path, { readonly: true })
-  const total = (db.prepare(`SELECT COUNT(*) as n FROM ${SQLITE_TABLE_NAME}`).get() as { n: number }).n
+  const total = (db.prepare(`SELECT COUNT(*) as n FROM ${DEFAULT_TABLE_NAME}`).get() as { n: number }).n
   const expired = (db.prepare(
-    `SELECT COUNT(*) as n FROM ${SQLITE_TABLE_NAME} WHERE expires_at IS NOT NULL AND expires_at < ?`,
+    `SELECT COUNT(*) as n FROM ${DEFAULT_TABLE_NAME} WHERE expires_at IS NOT NULL AND expires_at < ?`,
   ).get(Date.now()) as { n: number }).n
   db.close()
   return { total, expired }
@@ -67,7 +84,7 @@ function getSQLiteStats(path: string): { total: number; expired: number } {
 function getFileStats(path: string): { total: number; expired: number } {
   if (!existsSync(path)) return { total: 0, expired: 0 }
   try {
-    const store = JSON.parse(readFileSync(path, 'utf8')) as Record<string, { expiresAt: number | null }>
+    const store = JSON.parse(readFileSync(path, FILE_ENCODING)) as Record<string, { expiresAt: number | null }>
     const now = Date.now()
     const total = Object.keys(store).length
     const expired = Object.values(store).filter(e => e.expiresAt !== null && now > e.expiresAt).length
@@ -79,28 +96,28 @@ function getFileStats(path: string): { total: number; expired: number } {
 
 async function main() {
   const args = parseArgs(rawArgs)
-  const storageType = args['storage'] ?? DEFAULT_STORAGE_TYPE
-  const defaultPath = storageType === 'file' ? DEFAULT_FILE_PATH : DEFAULT_SQLITE_PATH
-  const storagePath = args['path'] ?? defaultPath
+  const storageType = args[ARG_STORAGE] ?? DEFAULT_STORAGE_TYPE
+  const defaultPath = storageType === STORAGE_TYPE_FILE ? DEFAULT_FILE_PATH : DEFAULT_SQLITE_PATH
+  const storagePath = args[ARG_PATH] ?? defaultPath
 
-  if (!command || command === 'help' || command === '--help') {
+  if (!command || command === COMMAND_HELP || command === COMMAND_HELP_FLAG) {
     printHelp()
     return
   }
 
-  if (command === 'stats') {
+  if (command === COMMAND_STATS) {
     let stats: { total: number; expired: number }
-    if (storageType === 'sqlite') {
+    if (storageType === STORAGE_TYPE_SQLITE) {
       if (!existsSync(storagePath)) {
-        console.log('Cache file not found:', storagePath)
+        console.log(MSG_CACHE_FILE_NOT_FOUND, storagePath)
         return
       }
       stats = getSQLiteStats(storagePath)
     } else {
       stats = getFileStats(storagePath)
     }
-    console.log('\nCache Statistics')
-    console.log('================')
+    console.log(MSG_STATS_HEADER)
+    console.log(MSG_STATS_DIVIDER)
     console.log(`Storage:  ${storageType} (${storagePath})`)
     console.log(`Entries:  ${stats.total}`)
     console.log(`Expired:  ${stats.expired} (not yet cleaned up)`)
@@ -108,27 +125,32 @@ async function main() {
     return
   }
 
-  if (command === 'list') {
-    const limit = parseInt(args['limit'] ?? String(DEFAULT_LIST_LIMIT), 10)
+  if (command === COMMAND_LIST) {
+    const rawLimit = parseInt(args[ARG_LIMIT] ?? String(DEFAULT_LIST_LIMIT), 10)
+    const limit = Number.isNaN(rawLimit) || rawLimit <= 0 ? DEFAULT_LIST_LIMIT : rawLimit
     // list is not on IStorage interface — read directly
     let keys: string[] = []
-    if (storageType === 'sqlite') {
+    if (storageType === STORAGE_TYPE_SQLITE) {
+      if (!existsSync(storagePath)) {
+        console.log(MSG_CACHE_EMPTY)
+        return
+      }
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Database = require('better-sqlite3') as typeof import('better-sqlite3')
       const db = new Database(storagePath, { readonly: true })
-      keys = (db.prepare(`SELECT key FROM ${SQLITE_TABLE_NAME} LIMIT ?`).all(limit) as { key: string }[]).map(r => r.key)
+      keys = (db.prepare(`SELECT key FROM ${DEFAULT_TABLE_NAME} LIMIT ?`).all(limit) as { key: string }[]).map(r => r.key)
       db.close()
     } else {
       if (existsSync(storagePath)) {
         try {
-          const store = JSON.parse(readFileSync(storagePath, 'utf8')) as Record<string, unknown>
+          const store = JSON.parse(readFileSync(storagePath, FILE_ENCODING)) as Record<string, unknown>
           keys = Object.keys(store).slice(0, limit)
         } catch { /* empty or invalid file */ }
       }
     }
 
     if (keys.length === 0) {
-      console.log('Cache is empty.')
+      console.log(MSG_CACHE_EMPTY)
       return
     }
     console.log(`\nCached entries (${keys.length}):`)
@@ -137,7 +159,7 @@ async function main() {
     return
   }
 
-  if (command === 'clear') {
+  if (command === COMMAND_CLEAR) {
     const storage = await getStorage(storageType, storagePath)
     await storage.clear()
     console.log(`Cache cleared (${storageType}: ${storagePath})`)

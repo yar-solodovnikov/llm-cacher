@@ -85,15 +85,34 @@ describe('createCachedClient — streaming', () => {
     expect(collected).toEqual(CHUNKS)
   })
 
-  it('stream: true and stream: false share the same cache key', async () => {
+  it('two non-streaming calls with the same params share one cache entry', async () => {
     const create = vi.fn().mockResolvedValue(RESPONSE)
-    const cachedFull = createCachedClient(makeClient(create))
-
-    // Prime the full cache
-    await cachedFull.chat.completions.create(PARAMS)
-    // Same params with stream — different code path but same key
-    await cachedFull.chat.completions.create(PARAMS)
+    const cached = createCachedClient(makeClient(create))
+    await cached.chat.completions.create(PARAMS)
+    await cached.chat.completions.create(PARAMS)
     expect(create).toHaveBeenCalledOnce()
+  })
+
+  it('streaming call after a cached full response hits the API once more (cross-type miss)', async () => {
+    async function* mockStream() { for (const c of CHUNKS) yield c }
+    const create = vi.fn()
+      .mockResolvedValueOnce(RESPONSE)    // first call: full
+      .mockResolvedValueOnce(mockStream()) // second call: stream
+    const cached = createCachedClient(makeClient(create))
+
+    // prime full cache
+    await cached.chat.completions.create(PARAMS)
+    // streaming request: same key but different entry type → one more API call
+    const s = await cached.chat.completions.create({ ...PARAMS, stream: true })
+    for await (const _ of s) { /* consume */ }
+    expect(create).toHaveBeenCalledTimes(2)
+
+    // third call (stream) now served from cache
+    const s2 = await cached.chat.completions.create({ ...PARAMS, stream: true })
+    const collected = []
+    for await (const chunk of s2) collected.push(chunk)
+    expect(create).toHaveBeenCalledTimes(2)
+    expect(collected).toEqual(CHUNKS)
   })
 })
 

@@ -9,6 +9,7 @@ import type {
   BatchWriteItemCommand,
 } from '@aws-sdk/client-dynamodb'
 import type { CacheEntry, IStorage } from './IStorage'
+import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from './IStorage'
 
 type DynamoCommands = {
   GetItemCommand: typeof GetItemCommand
@@ -32,6 +33,8 @@ const DEFAULT_KEY_ATTRIBUTE = 'pk'
 const DEFAULT_VALUE_ATTRIBUTE = 'value'
 const DEFAULT_TTL_ATTRIBUTE = 'ttl'
 const DYNAMODB_BATCH_WRITE_LIMIT = 25
+const DYNAMO_KEY_ALIAS = '#k'
+const MS_PER_SECOND = 1_000
 
 export class DynamoDBStorage implements IStorage {
   private client: DynamoDBClient
@@ -65,10 +68,12 @@ export class DynamoDBStorage implements IStorage {
 
     // DynamoDB TTL cleanup is eventual — do a client-side check too
     const ttlN = item[this.ttlAttr]?.N
-    const ttl = ttlN ? Number(ttlN) * 1000 : null
+    const ttl = ttlN ? Number(ttlN) * MS_PER_SECOND : null
     if (ttl !== null && Date.now() > ttl) return null
 
-    return JSON.parse(item[this.valueAttr].S!) as CacheEntry
+    const entry = JSON.parse(item[this.valueAttr].S!) as CacheEntry
+    if (entry.type !== ENTRY_TYPE_FULL && entry.type !== ENTRY_TYPE_STREAM) return null
+    return entry
   }
 
   async set(key: string, entry: CacheEntry): Promise<void> {
@@ -79,7 +84,7 @@ export class DynamoDBStorage implements IStorage {
 
     // DynamoDB TTL uses Unix seconds
     if (entry.expiresAt !== null) {
-      item[this.ttlAttr] = { N: String(Math.floor(entry.expiresAt / 1000)) }
+      item[this.ttlAttr] = { N: String(Math.floor(entry.expiresAt / MS_PER_SECOND)) }
     }
 
     await this.client.send(new this.cmds.PutItemCommand({ TableName: this.table, Item: item }))
@@ -101,8 +106,8 @@ export class DynamoDBStorage implements IStorage {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result: any = await this.client.send(new this.cmds.ScanCommand({
         TableName: this.table,
-        ProjectionExpression: '#k',
-        ExpressionAttributeNames: { '#k': this.keyAttr },
+        ProjectionExpression: DYNAMO_KEY_ALIAS,
+        ExpressionAttributeNames: { DYNAMO_KEY_ALIAS: this.keyAttr },
         ExclusiveStartKey: lastKey,
       }))
 

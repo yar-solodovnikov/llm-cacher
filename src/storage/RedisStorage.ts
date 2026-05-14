@@ -1,5 +1,6 @@
 import type { Redis, RedisOptions } from 'ioredis'
 import type { CacheEntry, IStorage } from './IStorage'
+import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from './IStorage'
 
 export interface RedisStorageOptions {
   url?: string
@@ -10,6 +11,8 @@ export interface RedisStorageOptions {
 
 const DEFAULT_KEY_PREFIX = 'llm-cache:'
 const REDIS_SCAN_COUNT = 100
+const REDIS_PX_FLAG = 'PX'
+const REDIS_INITIAL_CURSOR = '0'
 
 export class RedisStorage implements IStorage {
   private client: Redis
@@ -34,7 +37,9 @@ export class RedisStorage implements IStorage {
   async get(key: string): Promise<CacheEntry | null> {
     const raw = await this.client.get(this.prefixed(key))
     if (!raw) return null
-    return JSON.parse(raw) as CacheEntry
+    const entry = JSON.parse(raw) as CacheEntry
+    if (entry.type !== ENTRY_TYPE_FULL && entry.type !== ENTRY_TYPE_STREAM) return null
+    return entry
   }
 
   async set(key: string, entry: CacheEntry): Promise<void> {
@@ -44,7 +49,7 @@ export class RedisStorage implements IStorage {
     if (entry.expiresAt !== null) {
       const ttlMs = entry.expiresAt - Date.now()
       if (ttlMs <= 0) return
-      await this.client.set(prefixedKey, serialized, 'PX', ttlMs)
+      await this.client.set(prefixedKey, serialized, REDIS_PX_FLAG, ttlMs)
     } else {
       await this.client.set(prefixedKey, serialized)
     }
@@ -56,12 +61,12 @@ export class RedisStorage implements IStorage {
 
   async clear(): Promise<void> {
     const pattern = `${this.keyPrefix}*`
-    let cursor = '0'
+    let cursor = REDIS_INITIAL_CURSOR
     do {
       const [next, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', REDIS_SCAN_COUNT)
       cursor = next
       if (keys.length > 0) await this.client.del(...keys)
-    } while (cursor !== '0')
+    } while (cursor !== REDIS_INITIAL_CURSOR)
   }
 
   quit(): Promise<'OK'> {

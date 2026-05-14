@@ -4,16 +4,15 @@ import { SQLiteStorage } from '../storage/SQLiteStorage'
 import { CacheManager } from '../core/CacheManager'
 import { KeyBuilder } from '../core/KeyBuilder'
 import type { IStorage } from '../storage/IStorage'
+import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from '../storage/IStorage'
 import type { LlmCacheOptions } from './base'
-
-const DEFAULT_FILE_STORAGE_PATH = './llm-cache.json'
-const DEFAULT_SQLITE_STORAGE_PATH = './llm-cache.db'
+import { DEFAULT_FILE_PATH, DEFAULT_SQLITE_PATH } from '../constants'
 
 export function resolveStorage(opts: LlmCacheOptions): IStorage {
   const s = opts.storage
   if (!s || s === 'memory') return new MemoryStorage({ maxSize: opts.maxSize })
-  if (s === 'file') return new FileStorage({ path: opts.storagePath ?? DEFAULT_FILE_STORAGE_PATH })
-  if (s === 'sqlite') return new SQLiteStorage({ path: opts.storagePath ?? DEFAULT_SQLITE_STORAGE_PATH })
+  if (s === 'file') return new FileStorage({ path: opts.storagePath ?? DEFAULT_FILE_PATH })
+  if (s === 'sqlite') return new SQLiteStorage({ path: opts.storagePath ?? DEFAULT_SQLITE_PATH })
   return s
 }
 
@@ -31,9 +30,11 @@ export async function* replayStream(chunks: unknown[]): AsyncGenerator<unknown> 
 }
 
 export function extractText(params: Record<string, unknown>): string | undefined {
-  const messages = params.messages as { role: string; content: string }[] | undefined
+  const messages = params.messages as { role: string; content: unknown }[] | undefined
   if (!messages?.length) return undefined
-  return messages.map(m => `${m.role}: ${m.content}`).join('\n')
+  // non-string content (vision, tool results) → skip semantic indexing
+  if (messages.some(m => typeof m.content !== 'string')) return undefined
+  return messages.map(m => `${m.role}: ${m.content as string}`).join('\n')
 }
 
 export function buildCachedCreate(
@@ -46,7 +47,7 @@ export function buildCachedCreate(
 
     if (params.stream) {
       const cached = await manager.get(key, text)
-      if (cached?.type === 'stream' && cached.chunks) return replayStream(cached.chunks)
+      if (cached?.type === ENTRY_TYPE_STREAM && cached.chunks) return replayStream(cached.chunks)
 
       const stream = (await originalCreate(params)) as AsyncIterable<unknown>
       return (async function* () {
@@ -55,15 +56,15 @@ export function buildCachedCreate(
           chunks.push(chunk)
           yield chunk
         }
-        await manager.set(key, { type: 'stream', value: null, chunks }, text)
+        await manager.set(key, { type: ENTRY_TYPE_STREAM, value: null, chunks }, text)
       })()
     }
 
     const cached = await manager.get(key, text)
-    if (cached?.type === 'full') return cached.value
+    if (cached?.type === ENTRY_TYPE_FULL) return cached.value
 
     const response = await originalCreate(params)
-    await manager.set(key, { type: 'full', value: response }, text)
+    await manager.set(key, { type: ENTRY_TYPE_FULL, value: response }, text)
     return response
   }
 }

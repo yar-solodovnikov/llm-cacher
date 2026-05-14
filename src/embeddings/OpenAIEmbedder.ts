@@ -29,6 +29,8 @@ export class OpenAIEmbedder implements IEmbedder {
       input: text,
       ...(this.dimensions !== DEFAULT_DIMENSIONS && { dimensions: this.dimensions }),
     })
-    return response.data[0].embedding as number[]
+    const item = response.data[0]
+    if (!item) throw new Error(`OpenAI embeddings API returned no data for model "${this.model}"`)
+    return item.embedding as number[]
   }
 }

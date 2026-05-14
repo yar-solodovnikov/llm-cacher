@@ -1,5 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import type { CacheEntry, IStorage } from './IStorage'
+import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from './IStorage'
+import { FILE_ENCODING } from '../constants'
 
 export interface FileStorageOptions {
   path: string
@@ -17,14 +19,14 @@ export class FileStorage implements IStorage {
   private read(): FileStore {
     if (!existsSync(this.path)) return {}
     try {
-      return JSON.parse(readFileSync(this.path, 'utf8')) as FileStore
+      return JSON.parse(readFileSync(this.path, FILE_ENCODING)) as FileStore
     } catch {
       return {}
     }
   }
 
   private write(store: FileStore): void {
-    writeFileSync(this.path, JSON.stringify(store), 'utf8')
+    writeFileSync(this.path, JSON.stringify(store), FILE_ENCODING)
   }
 
   async get(key: string): Promise<CacheEntry | null> {
@@ -37,6 +39,8 @@ export class FileStorage implements IStorage {
       this.write(store)
       return null
     }
+
+    if (entry.type !== ENTRY_TYPE_FULL && entry.type !== ENTRY_TYPE_STREAM) return null
 
     return entry
   }

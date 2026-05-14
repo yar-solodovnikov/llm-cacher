@@ -1,5 +1,8 @@
 import { createHash } from 'crypto'
 
+const HASH_ALGORITHM = 'sha256'
+const HASH_DIGEST = 'hex'
+
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys)
   if (value !== null && typeof value === 'object') {
@@ -14,5 +17,5 @@ function sortKeys(value: unknown): unknown {
 
 export function hashObject(obj: unknown): string {
   const normalized = JSON.stringify(sortKeys(obj))
-  return createHash('sha256').update(normalized).digest('hex')
+  return createHash(HASH_ALGORITHM).update(normalized).digest(HASH_DIGEST)
 }

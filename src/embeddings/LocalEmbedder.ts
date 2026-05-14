@@ -14,19 +14,19 @@ export class LocalEmbedder implements IEmbedder {
   readonly dimensions = DEFAULT_DIMENSIONS
   private readonly model: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private pipeline: any = null
+  private pipelinePromise: Promise<any> | null = null
 
   constructor(opts: LocalEmbedderOptions = {}) {
     this.model = opts.model ?? DEFAULT_MODEL
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async getPipeline(): Promise<any> {
-    if (this.pipeline) return this.pipeline
+  private getPipeline(): Promise<any> {
+    if (this.pipelinePromise) return this.pipelinePromise
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { pipeline } = require('@huggingface/transformers') as typeof import('@huggingface/transformers')
-    this.pipeline = await pipeline(PIPELINE_TASK, this.model)
-    return this.pipeline
+    this.pipelinePromise = pipeline(PIPELINE_TASK, this.model)
+    return this.pipelinePromise
   }
 
   async embed(text: string): Promise<number[]> {
