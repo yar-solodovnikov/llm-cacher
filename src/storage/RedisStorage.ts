@@ -9,6 +9,7 @@ export interface RedisStorageOptions {
 }
 
 const DEFAULT_KEY_PREFIX = 'llm-cache:'
+const REDIS_SCAN_COUNT = 100
 
 export class RedisStorage implements IStorage {
   private client: Redis
@@ -54,8 +55,13 @@ export class RedisStorage implements IStorage {
   }
 
   async clear(): Promise<void> {
-    const keys = await this.client.keys(`${this.keyPrefix}*`)
-    if (keys.length > 0) await this.client.del(...keys)
+    const pattern = `${this.keyPrefix}*`
+    let cursor = '0'
+    do {
+      const [next, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', REDIS_SCAN_COUNT)
+      cursor = next
+      if (keys.length > 0) await this.client.del(...keys)
+    } while (cursor !== '0')
   }
 
   quit(): Promise<'OK'> {

@@ -38,6 +38,8 @@ createCachedClient(client, {
 
 Best for: scripts, CLI tools, one-off jobs.
 
+> **Note:** FileStorage is designed for single-process use. Concurrent writes from multiple processes are not safe — the last write wins and may overwrite changes from another process. Use SQLite or Redis for multi-process environments.
+
 ## Redis
 
 ```bash
@@ -63,7 +65,7 @@ Or connect by URL:
 new RedisStorage({ url: 'redis://localhost:6379' })
 ```
 
-TTL is set natively via Redis `PX` — no background sweep needed.
+TTL is set natively via Redis `PX` — no background sweep needed. `clear()` uses `SCAN` internally so it does not block the Redis event loop regardless of dataset size.
 
 Best for: multi-process apps, horizontal scaling, high-throughput services.
 

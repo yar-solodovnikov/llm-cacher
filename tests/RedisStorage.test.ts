@@ -25,9 +25,9 @@ function makeRedisClient() {
       keys.flat().forEach(k => store.delete(k))
       return keys.length
     }),
-    keys: vi.fn(async (pattern: string) => {
+    scan: vi.fn(async (_cursor: string, _match: string, pattern: string) => {
       const prefix = pattern.replace('*', '')
-      return [...store.keys()].filter(k => k.startsWith(prefix))
+      return ['0', [...store.keys()].filter(k => k.startsWith(prefix))]
     }),
     quit: vi.fn(async () => 'OK'),
   }
