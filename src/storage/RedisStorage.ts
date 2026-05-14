@@ -19,7 +19,7 @@ export class RedisStorage implements IStorage {
       // dynamic import to keep ioredis optional
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const IORedis = require('ioredis') as typeof import('ioredis').default
-      this.client = opts.url ? new IORedis(opts.url, opts.options) : new IORedis(opts.options)
+      this.client = opts.url ? new IORedis(opts.url, opts.options ?? {}) : new IORedis(opts.options ?? {})
     }
     this.keyPrefix = opts.keyPrefix ?? 'llm-cache:'
   }

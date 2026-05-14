@@ -1,6 +1,7 @@
 import type {
   DynamoDBClient,
   DynamoDBClientConfig,
+  AttributeValue,
   GetItemCommand,
   PutItemCommand,
   DeleteItemCommand,
@@ -58,14 +59,15 @@ export class DynamoDBStorage implements IStorage {
     if (!item || !item[this.valueAttr]?.S) return null
 
     // DynamoDB TTL cleanup is eventual — do a client-side check too
-    const ttl = item[this.ttlAttr]?.N ? Number(item[this.ttlAttr].N) * 1000 : null
+    const ttlN = item[this.ttlAttr]?.N
+    const ttl = ttlN ? Number(ttlN) * 1000 : null
     if (ttl !== null && Date.now() > ttl) return null
 
-    return JSON.parse(item[this.valueAttr].S) as CacheEntry
+    return JSON.parse(item[this.valueAttr].S!) as CacheEntry
   }
 
   async set(key: string, entry: CacheEntry): Promise<void> {
-    const item: Record<string, { S?: string; N?: string }> = {
+    const item: Record<string, AttributeValue> = {
       [this.keyAttr]: { S: key },
       [this.valueAttr]: { S: JSON.stringify(entry) },
     }
