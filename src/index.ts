@@ -1,0 +1,17 @@
+export { createCachedClient } from './adapters/openai'
+export type { LlmCacheOptions } from './adapters/base'
+
+export { MemoryStorage } from './storage/MemoryStorage'
+export { FileStorage } from './storage/FileStorage'
+export { RedisStorage } from './storage/RedisStorage'
+export { SQLiteStorage } from './storage/SQLiteStorage'
+export { DynamoDBStorage } from './storage/DynamoDBStorage'
+export type { IStorage, CacheEntry } from './storage/IStorage'
+export type { MemoryStorageOptions } from './storage/MemoryStorage'
+export type { FileStorageOptions } from './storage/FileStorage'
+export type { RedisStorageOptions } from './storage/RedisStorage'
+export type { SQLiteStorageOptions } from './storage/SQLiteStorage'
+export type { DynamoDBStorageOptions } from './storage/DynamoDBStorage'
+
+export { CacheManager } from './core/CacheManager'
+export type { CacheManagerOptions, StorageErrorStrategy } from './core/CacheManager'
