@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 
 const DEFAULT_STORAGE_TYPE = 'sqlite'
 const DEFAULT_SQLITE_PATH = './llm-cache.db'
@@ -65,12 +65,15 @@ function getSQLiteStats(path: string): { total: number; expired: number } {
 // File-specific stats
 function getFileStats(path: string): { total: number; expired: number } {
   if (!existsSync(path)) return { total: 0, expired: 0 }
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const store = require(require('path').resolve(path)) as Record<string, { expiresAt: number | null }>
-  const now = Date.now()
-  const total = Object.keys(store).length
-  const expired = Object.values(store).filter(e => e.expiresAt !== null && now > e.expiresAt).length
-  return { total, expired }
+  try {
+    const store = JSON.parse(readFileSync(path, 'utf8')) as Record<string, { expiresAt: number | null }>
+    const now = Date.now()
+    const total = Object.keys(store).length
+    const expired = Object.values(store).filter(e => e.expiresAt !== null && now > e.expiresAt).length
+    return { total, expired }
+  } catch {
+    return { total: 0, expired: 0 }
+  }
 }
 
 async function main() {
@@ -117,9 +120,10 @@ async function main() {
       db.close()
     } else {
       if (existsSync(storagePath)) {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const store = require(require('path').resolve(storagePath)) as Record<string, unknown>
-        keys = Object.keys(store).slice(0, limit)
+        try {
+          const store = JSON.parse(readFileSync(storagePath, 'utf8')) as Record<string, unknown>
+          keys = Object.keys(store).slice(0, limit)
+        } catch { /* empty or invalid file */ }
       }
     }
 

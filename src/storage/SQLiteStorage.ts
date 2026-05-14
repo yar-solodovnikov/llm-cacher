@@ -22,7 +22,9 @@ export class SQLiteStorage implements IStorage {
       const BetterSqlite3 = require('better-sqlite3') as typeof import('better-sqlite3')
       this.db = new BetterSqlite3(opts.path ?? DEFAULT_DB_PATH)
     }
-    this.table = opts.tableName ?? DEFAULT_TABLE_NAME
+    const tableName = opts.tableName ?? DEFAULT_TABLE_NAME
+    if (!/^\w+$/.test(tableName)) throw new Error(`Invalid tableName: "${tableName}". Use only letters, digits, and underscores.`)
+    this.table = tableName
     this.init()
   }
 
