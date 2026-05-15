@@ -1,6 +1,9 @@
+import { DEFAULT_EMBEDDING_DIMENSIONS } from '../constants'
+
 export type IndexType = 'flat' | 'hnsw'
 
-const DEFAULT_DIMENSIONS = 384
+const INDEX_TYPE_FLAT: IndexType = 'flat'
+const INDEX_TYPE_HNSW: IndexType = 'hnsw'
 const DEFAULT_MAX_ELEMENTS = 100_000
 const HNSW_TOP_K = 1
 const HNSW_SPACE = 'cosine'
@@ -38,11 +41,12 @@ export class SimilarityEngine {
   private labelToKey = new Map<number, string>()
   private keyToLabel = new Map<string, number>()
   private nextLabel = 0
+  private deletedCount = 0
 
   constructor(opts: SimilarityEngineOptions) {
     this.threshold = opts.threshold
-    this.indexType = opts.indexType ?? 'flat'
-    this.dimensions = opts.dimensions ?? DEFAULT_DIMENSIONS
+    this.indexType = opts.indexType ?? INDEX_TYPE_FLAT
+    this.dimensions = opts.dimensions ?? DEFAULT_EMBEDDING_DIMENSIONS
     this.maxElements = opts.maxElements ?? DEFAULT_MAX_ELEMENTS
   }
 
@@ -52,14 +56,16 @@ export class SimilarityEngine {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { HierarchicalNSW } = require('hnswlib-node') as typeof import('hnswlib-node')
     this.hnswIndex = new HierarchicalNSW(HNSW_SPACE, this.dimensions)
-    this.hnswIndex.initIndex(this.maxElements)
+    this.hnswIndex.initIndex({ maxElements: this.maxElements, allowReplaceDeleted: true })
     return this.hnswIndex
   }
 
   add(key: string, embedding: number[]): void {
-    if (this.indexType === 'hnsw') {
+    if (this.indexType === INDEX_TYPE_HNSW) {
       const label = this.nextLabel++
-      this.getHnsw().addPoint(embedding, label)
+      const replaceDeleted = this.deletedCount > 0
+      this.getHnsw().addPoint(embedding, label, replaceDeleted)
+      if (replaceDeleted) this.deletedCount--
       this.labelToKey.set(label, key)
       this.keyToLabel.set(key, label)
     } else {
@@ -68,12 +74,13 @@ export class SimilarityEngine {
   }
 
   remove(key: string): void {
-    if (this.indexType === 'hnsw') {
+    if (this.indexType === INDEX_TYPE_HNSW) {
       const label = this.keyToLabel.get(key)
       if (label !== undefined) {
         this.getHnsw().markDelete(label)
         this.keyToLabel.delete(key)
         this.labelToKey.delete(label)
+        this.deletedCount++
       }
     } else {
       this.flatEntries.delete(key)
@@ -81,7 +88,7 @@ export class SimilarityEngine {
   }
 
   findSimilar(queryEmbedding: number[]): string | null {
-    if (this.indexType === 'hnsw') {
+    if (this.indexType === INDEX_TYPE_HNSW) {
       return this.findHnsw(queryEmbedding)
     }
     return this.findFlat(queryEmbedding)
@@ -114,6 +121,6 @@ export class SimilarityEngine {
   }
 
   get size(): number {
-    return this.indexType === 'hnsw' ? this.keyToLabel.size : this.flatEntries.size
+    return this.indexType === INDEX_TYPE_HNSW ? this.keyToLabel.size : this.flatEntries.size
   }
 }

@@ -1,8 +1,8 @@
 import type { IEmbedder } from './IEmbedder'
+import { DEFAULT_EMBEDDING_DIMENSIONS } from '../constants'
 
 // all-MiniLM-L6-v2 — 384 dims, ~25MB, no API key needed
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2'
-const DEFAULT_DIMENSIONS = 384
 const PIPELINE_TASK = 'feature-extraction'
 const POOLING_STRATEGY = 'mean'
 
@@ -11,7 +11,7 @@ export interface LocalEmbedderOptions {
 }
 
 export class LocalEmbedder implements IEmbedder {
-  readonly dimensions = DEFAULT_DIMENSIONS
+  readonly dimensions = DEFAULT_EMBEDDING_DIMENSIONS
   private readonly model: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private pipelinePromise: Promise<any> | null = null
