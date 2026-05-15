@@ -43,11 +43,14 @@ npm install better-sqlite3
 # DynamoDB
 npm install @aws-sdk/client-dynamodb
 
-# Semantic caching (local model, no API key needed)
-npm install @huggingface/transformers hnswlib-node
+# Semantic caching with local model (no API key needed)
+npm install @huggingface/transformers
 
-# Semantic caching (OpenAI embeddings)
-npm install openai hnswlib-node
+# Semantic caching with OpenAI embeddings
+npm install openai
+
+# HNSW index (only needed for 10 000+ cached entries)
+npm install hnswlib-node
 ```
 
 ---
@@ -104,7 +107,7 @@ Requests are cached by a **SHA-256 hash** of the request parameters (model, mess
 
 - **Cache hit**: the response is returned immediately without calling the LLM API.
 - **Cache miss**: the request goes to the API, the response is stored, then returned.
-- **Streaming**: chunks are accumulated, stored as a list, and replayed as an `AsyncGenerator` on subsequent calls Ã¢â‚¬â€ the caller's code doesn't need to change.
+- **Streaming**: chunks are accumulated, stored as a list, and replayed as an `AsyncGenerator` on subsequent calls — the caller's code doesn't need to change.
 
 ---
 
@@ -205,7 +208,7 @@ createCachedClient(client, {
   storage: 'sqlite',
   semantic: {
     embedder: new LocalEmbedder(), // downloads ~22MB model on first use
-    threshold: 0.92,               // cosine similarity 0Ã¢â‚¬â€œ1, higher = stricter
+    threshold: 0.92,               // cosine similarity 0–1, higher = stricter
   },
 })
 ```
@@ -357,10 +360,10 @@ Runnable examples are in the [`examples/`](examples/) folder. Requires `OPENAI_A
 
 | File | What it shows |
 |---|---|
-| [`basic.ts`](examples/basic.ts) | Memory cache Ã¢â‚¬â€ first call vs cached call, timing comparison |
+| [`basic.ts`](examples/basic.ts) | Memory cache — first call vs cached call, timing comparison |
 | [`streaming.ts`](examples/streaming.ts) | Streaming request on first call, chunk replay from cache on second |
 | [`with-redis.ts`](examples/with-redis.ts) | Redis storage with `onStorageError: 'passthrough'` |
-| [`semantic.ts`](examples/semantic.ts) | Local embedder Ã¢â‚¬â€ different phrasings hit the same cache entry |
+| [`semantic.ts`](examples/semantic.ts) | Local embedder — different phrasings hit the same cache entry |
 
 ```bash
 npx tsx examples/basic.ts
@@ -397,7 +400,7 @@ Same as above but for Anthropic's `messages.create`.
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `embedder` | `IEmbedder` | required | Embedding model to use. |
-| `threshold` | `number` | `0.92` | Minimum cosine similarity (0Ã¢â‚¬â€œ1) to count as a cache hit. |
+| `threshold` | `number` | `0.92` | Minimum cosine similarity (0–1) to count as a cache hit. |
 | `indexType` | `'flat' \| 'hnsw'` | `'flat'` | Search index. Use `'hnsw'` for large caches (10k+ entries). |
 
 ### Storage classes
