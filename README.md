@@ -466,4 +466,11 @@ createCachedClient(client, { storage: new MyStorage() })
 
 MIT
 
+## ❤️ Support
+
+If `llm-cacher` saves you money on LLM bills, consider supporting development:
+
+- ☕ [Buy me a coffee](https://buymeacoffee.com/yaroslavsolo) — quick one-time support
+- 💖 [GitHub Sponsors](https://github.com/sponsors/yar-solodovnikov) — monthly support
+
 
