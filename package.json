@@ -78,7 +78,7 @@
   },
   "homepage": "https://yar-solodovnikov.github.io/llm-cacher/",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "sideEffects": false,
   "devDependencies": {
