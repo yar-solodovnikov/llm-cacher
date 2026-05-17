@@ -62,6 +62,8 @@ export class SimilarityEngine {
 
   add(key: string, embedding: number[]): void {
     if (this.indexType === INDEX_TYPE_HNSW) {
+      // Evict existing entry first to avoid a dangling labelToKey pointer
+      if (this.keyToLabel.has(key)) this.remove(key)
       const label = this.nextLabel++
       const replaceDeleted = this.deletedCount > 0
       this.getHnsw().addPoint(embedding, label, replaceDeleted)

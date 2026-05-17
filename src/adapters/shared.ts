@@ -30,11 +30,11 @@ async function* replayStream(chunks: unknown[]): AsyncGenerator<unknown> {
 }
 
 function extractText(params: Record<string, unknown>): string | undefined {
-  const messages = params.messages as { role: string; content: unknown }[] | undefined
-  if (!messages?.length) return undefined
+  const messages = params.messages
+  if (!Array.isArray(messages) || messages.length === 0) return undefined
   // non-string content (vision, tool results) → skip semantic indexing
-  if (messages.some(m => typeof m.content !== 'string')) return undefined
-  return messages.map(m => `${m.role}: ${m.content as string}`).join('\n')
+  if ((messages as { role: string; content: unknown }[]).some(m => typeof m.content !== 'string')) return undefined
+  return (messages as { role: string; content: string }[]).map(m => `${m.role}: ${m.content}`).join('\n')
 }
 
 export function buildCachedCreate(
@@ -56,7 +56,8 @@ export function buildCachedCreate(
           chunks.push(chunk)
           yield chunk
         }
-        await manager.set(key, { type: ENTRY_TYPE_STREAM, value: null, chunks }, text)
+        // Storage errors after full delivery must not propagate to the consumer
+        await manager.set(key, { type: ENTRY_TYPE_STREAM, value: null, chunks }, text).catch(() => undefined)
       })()
     }
 
@@ -64,7 +65,8 @@ export function buildCachedCreate(
     if (cached?.type === ENTRY_TYPE_FULL) return cached.value
 
     const response = await originalCreate(params)
-    await manager.set(key, { type: ENTRY_TYPE_FULL, value: response }, text)
+    // Storage errors must not swallow the response the caller already paid for
+    await manager.set(key, { type: ENTRY_TYPE_FULL, value: response }, text).catch(() => undefined)
     return response
   }
 }

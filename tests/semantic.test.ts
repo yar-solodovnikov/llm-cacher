@@ -85,6 +85,32 @@ describe('CacheManager — semantic cache', () => {
     expect((manager as unknown as { similarity: { size: number } }).similarity?.size).toBe(0)
   })
 
+  it('cleans up stale similarity entry on exact-match miss so it never shows up in future semantic searches', async () => {
+    const embedder = makeMockEmbedder({
+      'user: explain async/await': [1, 0, 0],
+      'user: what is async/await?': [0.99, 0.1, 0],
+    })
+    const manager = new CacheManager({
+      storage: new MemoryStorage(),
+      semantic: { embedder, threshold: 0.9 },
+    })
+
+    await manager.set('key1', { type: 'full', value: 'cached' }, 'user: explain async/await')
+
+    // Force-expire the entry by overwriting it with an already-past expiresAt
+    const storage = (manager as unknown as { storage: MemoryStorage }).storage
+    await storage.set('key1', { key: 'key1', type: 'full', value: 'cached', createdAt: 0, expiresAt: 1 })
+
+    // Exact-match get on the expired key — returns null, and must remove from similarity index
+    const exactMiss = await manager.get('key1', 'user: explain async/await')
+    expect(exactMiss).toBeNull()
+    expect((manager as unknown as { similarity: { size: number } }).similarity?.size).toBe(0)
+
+    // Subsequent semantic search must also return null (not find the ghost entry)
+    const semanticMiss = await manager.get('key2', 'user: what is async/await?')
+    expect(semanticMiss).toBeNull()
+  })
+
   it('does not use semantic when no text is provided', async () => {
     const embedder = makeMockEmbedder({})
     const manager = new CacheManager({

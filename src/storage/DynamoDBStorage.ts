@@ -113,12 +113,17 @@ export class DynamoDBStorage implements IStorage {
 
       const items: Record<string, AttributeValue>[] = result.Items ?? []
       for (let i = 0; i < items.length; i += DYNAMODB_BATCH_WRITE_LIMIT) {
-        const batch = items.slice(i, i + DYNAMODB_BATCH_WRITE_LIMIT).map(item => ({
+        let requestItems = items.slice(i, i + DYNAMODB_BATCH_WRITE_LIMIT).map(item => ({
           DeleteRequest: { Key: { [this.keyAttr]: item[this.keyAttr] } },
         }))
-        await this.client.send(
-          new this.cmds.BatchWriteItemCommand({ RequestItems: { [this.table]: batch } }),
-        )
+        // Retry until DynamoDB has processed every item (capacity throttle can leave UnprocessedItems)
+        while (requestItems.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const batchResult: any = await this.client.send(
+            new this.cmds.BatchWriteItemCommand({ RequestItems: { [this.table]: requestItems } }),
+          )
+          requestItems = batchResult.UnprocessedItems?.[this.table] ?? []
+        }
       }
 
       lastKey = result.LastEvaluatedKey as Record<string, AttributeValue> | undefined

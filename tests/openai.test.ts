@@ -116,6 +116,29 @@ describe('createCachedClient — streaming', () => {
   })
 })
 
+describe('createCachedClient — extractText edge cases', () => {
+  it('does not throw when messages is not an array', async () => {
+    const create = vi.fn().mockResolvedValue(RESPONSE)
+    const cached = createCachedClient(makeClient(create))
+    // Pass a non-array value for messages — extractText must not throw
+    const result = await cached.chat.completions.create({
+      model: 'gpt-4o',
+      messages: 'not-an-array' as unknown as [],
+    })
+    expect(result).toEqual(RESPONSE)
+  })
+
+  it('does not throw when messages contains non-string content', async () => {
+    const create = vi.fn().mockResolvedValue(RESPONSE)
+    const cached = createCachedClient(makeClient(create))
+    const result = await cached.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'https://example.com/img.png' } }] }],
+    })
+    expect(result).toEqual(RESPONSE)
+  })
+})
+
 describe('createCachedClient — storage passthrough', () => {
   it('falls through to LLM when storage throws', async () => {
     const create = vi.fn().mockResolvedValue(RESPONSE)
@@ -131,5 +154,45 @@ describe('createCachedClient — storage passthrough', () => {
     })
     const result = await cached.chat.completions.create(PARAMS)
     expect(result).toEqual(RESPONSE)
+  })
+
+  it('returns full response even when storage set fails with onStorageError throw (non-streaming)', async () => {
+    const create = vi.fn().mockResolvedValue(RESPONSE)
+    const brokenStorage = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockRejectedValue(new Error('storage down')),
+      delete: vi.fn(),
+      clear: vi.fn(),
+    }
+    const cached = createCachedClient(makeClient(create), {
+      storage: brokenStorage,
+      onStorageError: 'throw',
+    })
+    // Response must be returned even though the cache set() threw
+    const result = await cached.chat.completions.create(PARAMS)
+    expect(result).toEqual(RESPONSE)
+  })
+
+  it('does not propagate storage set failure to stream consumer', async () => {
+    async function* mockStream() { for (const chunk of CHUNKS) yield chunk }
+    const create = vi.fn().mockResolvedValue(mockStream())
+    const brokenStorage = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockRejectedValue(new Error('storage down')),
+      delete: vi.fn(),
+      clear: vi.fn(),
+    }
+    const cached = createCachedClient(makeClient(create), {
+      storage: brokenStorage,
+      onStorageError: 'throw',
+    })
+
+    const stream = await cached.chat.completions.create({ ...PARAMS, stream: true })
+    const collected: unknown[] = []
+    // Direct for await — if Bug #3 regresses, the manager.set() rejection would
+    // propagate through the generator and this loop would throw before we reach
+    // the expect below, failing the test.
+    for await (const chunk of stream) collected.push(chunk)
+    expect(collected).toEqual(CHUNKS)
   })
 })

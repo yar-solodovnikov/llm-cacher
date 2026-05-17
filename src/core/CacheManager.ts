@@ -49,6 +49,11 @@ export class CacheManager {
       const exact = await this.storage.get(key)
       if (exact) return exact
 
+      // If storage returned null for a key that was semantically indexed, the entry
+      // expired — remove it from the similarity index now rather than waiting for a
+      // future semantic search to stumble upon it (prevents unbounded index growth).
+      if (this.similarity) this.similarity.remove(key)
+
       // 2. semantic match
       if (text && this.embedder && this.similarity) {
         const embedding = await this.embedder.embed(text)

@@ -109,5 +109,54 @@ describe('DynamoDBStorage', () => {
     expect(await storage.get('a')).toBeNull()
     expect(await storage.get('b')).toBeNull()
   })
+
+  it('retries UnprocessedItems from BatchWriteItemCommand until all items are deleted', async () => {
+    // Simulate DynamoDB returning an unprocessed item on the first batch call.
+    // The second call succeeds with no leftovers.
+    const deleted: string[] = []
+    let batchCallCount = 0
+
+    const clientWithUnprocessed = {
+      send: vi.fn(async (command: { constructor: { name: string }; input: Record<string, unknown> }) => {
+        if (command.constructor.name === 'ScanCommand') {
+          return {
+            Items: [
+              { pk: { S: 'key-a' } },
+              { pk: { S: 'key-b' } },
+            ],
+          }
+        }
+        if (command.constructor.name === 'BatchWriteItemCommand') {
+          batchCallCount++
+          const input = command.input as {
+            RequestItems: Record<string, { DeleteRequest: { Key: { pk: { S: string } } } }[]>
+          }
+          const requests = Object.values(input.RequestItems).flat()
+
+          if (batchCallCount === 1) {
+            // Process only the first item; return the second as unprocessed
+            deleted.push(requests[0].DeleteRequest.Key['pk'].S)
+            return {
+              UnprocessedItems: {
+                'llm-cacher': [requests[1]],
+              },
+            }
+          }
+          // Second call — process everything
+          requests.forEach(r => deleted.push(r.DeleteRequest.Key['pk'].S))
+          return { UnprocessedItems: {} }
+        }
+        return {}
+      }),
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const s = new DynamoDBStorage({ tableName: 'llm-cacher', client: clientWithUnprocessed as any })
+    await s.clear()
+
+    expect(batchCallCount).toBe(2)
+    expect(deleted).toContain('key-a')
+    expect(deleted).toContain('key-b')
+  })
 })
 
