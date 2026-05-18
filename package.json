@@ -1,6 +1,6 @@
 {
   "name": "llm-cacher",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Cache LLM responses — exact and semantic matching",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
