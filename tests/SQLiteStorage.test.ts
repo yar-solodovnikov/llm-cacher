@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import Database from 'better-sqlite3'
 import { SQLiteStorage } from '../src/storage/SQLiteStorage'
 import type { CacheEntry } from '../src/storage/IStorage'
@@ -70,5 +70,18 @@ describe('SQLiteStorage', () => {
     await storage.set('k1', entry)
     const result = await storage.get('k1')
     expect(result?.chunks).toEqual([{ delta: 'hello' }, { delta: ' world' }])
+  })
+
+  it('throws on invalid tableName', () => {
+    const db = new Database(':memory:')
+    expect(() => new SQLiteStorage({ db, tableName: 'bad-table!' })).toThrow('Invalid tableName')
+    db.close()
+  })
+
+  it('returns null for an entry with an invalid type (corruption guard)', async () => {
+    const db = (storage as unknown as { db: import('better-sqlite3').Database }).db
+    const corrupt = JSON.stringify({ key: 'k1', type: 'unknown', value: 'x', createdAt: Date.now(), expiresAt: null })
+    db.prepare('INSERT INTO llm_cache (key, value, expires_at) VALUES (?, ?, NULL)').run('k1', corrupt)
+    expect(await storage.get('k1')).toBeNull()
   })
 })

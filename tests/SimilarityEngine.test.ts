@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+﻿import { describe, it, expect } from 'vitest'
 import { SimilarityEngine } from '../src/core/SimilarityEngine'
 
 // simple 3-dim embeddings for testing
@@ -29,6 +29,12 @@ describe('SimilarityEngine — flat', () => {
     engine.add('key-a', vecA)
     engine.remove('key-a')
     expect(engine.findSimilar(vecB)).toBeNull()
+  })
+
+  it('remove non-existent key is a no-op (does not throw)', () => {
+    const engine = new SimilarityEngine({ threshold: 0.9 })
+    expect(() => engine.remove('no-such-key')).not.toThrow()
+    expect(engine.size).toBe(0)
   })
 
   it('tracks size correctly', () => {
@@ -75,5 +81,11 @@ describe('SimilarityEngine — hnsw duplicate key', () => {
     engine.remove('key-a')
     expect(engine.size).toBe(0)
     expect(engine.findSimilar(vecC)).toBeNull()
+  })
+
+  it('HNSW remove non-existent key is a no-op (does not throw)', () => {
+    const engine = new SimilarityEngine({ threshold: 0.9, indexType: 'hnsw', dimensions: 3 })
+    expect(() => engine.remove('no-such-key')).not.toThrow()
+    expect(engine.size).toBe(0)
   })
 })

@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest'
+﻿import { describe, it, expect, vi } from 'vitest'
 import { CacheManager } from '../src/core/CacheManager'
 import { MemoryStorage } from '../src/storage/MemoryStorage'
 import type { IStorage } from '../src/storage/IStorage'
+import type { IEmbedder } from '../src/embeddings/IEmbedder'
 
 function makeBrokenStorage(): IStorage {
   return {
@@ -9,6 +10,13 @@ function makeBrokenStorage(): IStorage {
     set: vi.fn().mockRejectedValue(new Error('storage down')),
     delete: vi.fn().mockRejectedValue(new Error('storage down')),
     clear: vi.fn().mockRejectedValue(new Error('storage down')),
+  }
+}
+
+function makeBrokenEmbedder(): IEmbedder {
+  return {
+    dimensions: 3,
+    embed: vi.fn().mockRejectedValue(new Error('embed failed')),
   }
 }
 
@@ -36,6 +44,28 @@ describe('CacheManager', () => {
     vi.useRealTimers()
   })
 
+  it('stores expiresAt: null when no TTL is configured', async () => {
+    const storage = new MemoryStorage({ sweepIntervalMs: 999_999 })
+    const manager = new CacheManager({ storage })
+    await manager.set('k1', { type: 'full', value: 'test' })
+    const entry = await storage.get('k1')
+    expect(entry?.expiresAt).toBeNull()
+    storage.destroy()
+  })
+
+  it('stores correct expiresAt when TTL is configured', async () => {
+    vi.useFakeTimers()
+    const now = 1_000_000
+    vi.setSystemTime(now)
+    const storage = new MemoryStorage({ sweepIntervalMs: 999_999 })
+    const manager = new CacheManager({ storage, ttl: '5s' })
+    await manager.set('k1', { type: 'full', value: 'test' })
+    const entry = await storage.get('k1')
+    expect(entry?.expiresAt).toBe(now + 5_000)
+    storage.destroy()
+    vi.useRealTimers()
+  })
+
   it('onStorageError: passthrough — get returns null instead of throwing', async () => {
     const manager = new CacheManager({ storage: makeBrokenStorage(), onStorageError: 'passthrough' })
     await expect(manager.get('k')).resolves.toBeNull()
@@ -49,6 +79,11 @@ describe('CacheManager', () => {
   it('onStorageError: throw — get rethrows', async () => {
     const manager = new CacheManager({ storage: makeBrokenStorage(), onStorageError: 'throw' })
     await expect(manager.get('k')).rejects.toThrow('storage down')
+  })
+
+  it('onStorageError: throw — set rethrows', async () => {
+    const manager = new CacheManager({ storage: makeBrokenStorage(), onStorageError: 'throw' })
+    await expect(manager.set('k', { type: 'full', value: null })).rejects.toThrow('storage down')
   })
 
   it('throws on TTL = 0 (would silently produce instant-expiry cache)', () => {
@@ -78,5 +113,29 @@ describe('CacheManager', () => {
     expect(await manager.get('k')).toBeNull()
     storage.destroy()
     vi.useRealTimers()
+  })
+
+  it('embedder throwing during get is handled by onStorageError: passthrough', async () => {
+    const storage = new MemoryStorage({ sweepIntervalMs: 999_999 })
+    const manager = new CacheManager({
+      storage,
+      semantic: { embedder: makeBrokenEmbedder(), threshold: 0.9 },
+      onStorageError: 'passthrough',
+    })
+    // exact miss, then embedder.embed() throws → passthrough → null
+    const result = await manager.get('no-such-key', 'some text')
+    expect(result).toBeNull()
+    storage.destroy()
+  })
+
+  it('embedder throwing during get rethrows when onStorageError is throw', async () => {
+    const storage = new MemoryStorage({ sweepIntervalMs: 999_999 })
+    const manager = new CacheManager({
+      storage,
+      semantic: { embedder: makeBrokenEmbedder(), threshold: 0.9 },
+      onStorageError: 'throw',
+    })
+    await expect(manager.get('no-such-key', 'some text')).rejects.toThrow('embed failed')
+    storage.destroy()
   })
 })

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { MemoryStorage } from '../src/storage/MemoryStorage'
 import type { CacheEntry } from '../src/storage/IStorage'
 
@@ -39,6 +39,14 @@ describe('MemoryStorage', () => {
     await storage.set('k1', entry)
     expect(await storage.get('k1')).toBeNull()
     expect(storage.size).toBe(0)
+  })
+
+  it('overwriting existing entry keeps size unchanged', async () => {
+    await storage.set('k1', makeEntry('k1', { value: 'old' }))
+    expect(storage.size).toBe(1)
+    await storage.set('k1', makeEntry('k1', { value: 'new' }))
+    expect(storage.size).toBe(1)
+    expect((await storage.get('k1'))?.value).toBe('new')
   })
 
   it('evicts the oldest entry when maxSize is reached', async () => {

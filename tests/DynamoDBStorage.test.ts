@@ -131,6 +131,38 @@ describe('DynamoDBStorage', () => {
     expect(await storage.get('b')).toBeNull()
   })
 
+  it('stores and retrieves a stream entry with chunks', async () => {
+    const entry = makeEntry('k1', {
+      type: 'stream',
+      chunks: [{ delta: 'Hello' }, { delta: ' world' }],
+    })
+    await storage.set('k1', entry)
+    const result = await storage.get('k1')
+    expect(result?.type).toBe('stream')
+    expect(result?.chunks).toEqual([{ delta: 'Hello' }, { delta: ' world' }])
+  })
+
+  it('returns null for an entry with an invalid type', async () => {
+    const corrupt = makeEntry('k1') as unknown as Record<string, unknown>
+    corrupt['type'] = 'invalid'
+    // Store it directly in the mock by calling PutItemCommand manually
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const s = new DynamoDBStorage({ tableName: 'llm-cacher', client: client as any })
+    // Inject corrupt entry via a set call with type overridden after serialisation
+    const originalSend = client.send
+    client.send.mockImplementationOnce(async (cmd: { constructor: { name: string }; input: Record<string, unknown> }) => {
+      if (cmd.constructor.name === 'PutItemCommand') {
+        const input = cmd.input as { Item: Record<string, { S?: string }> }
+        // Store a corrupted value where type is 'invalid'
+        const item = { ...input.Item, value: { S: JSON.stringify(corrupt) } }
+        return originalSend({ ...cmd, input: { ...cmd.input, Item: item } } as typeof cmd)
+      }
+      return originalSend(cmd)
+    })
+    await s.set('k1', makeEntry('k1'))
+    expect(await s.get('k1')).toBeNull()
+  })
+
   it('retries UnprocessedItems from BatchWriteItemCommand until all items are deleted', async () => {
     // Simulate DynamoDB returning an unprocessed item on the first batch call.
     // The second call succeeds with no leftovers.
@@ -180,4 +212,3 @@ describe('DynamoDBStorage', () => {
     expect(deleted).toContain('key-b')
   })
 })
-

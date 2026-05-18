@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+﻿import { describe, it, expect, vi } from 'vitest'
 import { createCachedAnthropicClient } from '../src/adapters/anthropic'
 
 const PARAMS = {
@@ -71,5 +71,23 @@ describe('createCachedAnthropicClient — streaming', () => {
 
     expect(create).toHaveBeenCalledOnce()
     expect(collected).toEqual(CHUNKS)
+  })
+})
+
+describe('createCachedAnthropicClient — storage passthrough', () => {
+  it('falls through to LLM when storage throws', async () => {
+    const create = vi.fn().mockResolvedValue(RESPONSE)
+    const brokenStorage = {
+      get: vi.fn().mockRejectedValue(new Error('down')),
+      set: vi.fn().mockRejectedValue(new Error('down')),
+      delete: vi.fn(),
+      clear: vi.fn(),
+    }
+    const cached = createCachedAnthropicClient(makeClient(create), {
+      storage: brokenStorage,
+      onStorageError: 'passthrough',
+    })
+    const result = await cached.messages.create(PARAMS)
+    expect(result).toEqual(RESPONSE)
   })
 })

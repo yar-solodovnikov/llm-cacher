@@ -69,6 +69,11 @@ describe('RedisStorage', () => {
     expect(client.set).toHaveBeenCalledWith('llm-cacher:k1', expect.any(String))
   })
 
+  it('does not call Redis set when entry is already expired', async () => {
+    await storage.set('k1', makeEntry('k1', { expiresAt: Date.now() - 1 }))
+    expect(client.set).not.toHaveBeenCalled()
+  })
+
   it('deletes an entry', async () => {
     await storage.set('k1', makeEntry('k1'))
     await storage.delete('k1')
@@ -87,5 +92,21 @@ describe('RedisStorage', () => {
     await s.set('k1', makeEntry('k1'))
     expect(client.set).toHaveBeenCalledWith('my-app:k1', expect.any(String))
   })
-})
 
+  it('stores and retrieves a stream entry with chunks', async () => {
+    const entry = makeEntry('k1', {
+      type: 'stream',
+      chunks: [{ delta: 'Hello' }, { delta: ' world' }],
+    })
+    await storage.set('k1', entry)
+    const result = await storage.get('k1')
+    expect(result?.type).toBe('stream')
+    expect(result?.chunks).toEqual([{ delta: 'Hello' }, { delta: ' world' }])
+  })
+
+  it('returns null for an entry with an invalid type', async () => {
+    const corrupt = JSON.stringify({ key: 'k1', type: 'invalid', value: 'x', createdAt: Date.now(), expiresAt: null })
+    client.get.mockResolvedValueOnce(corrupt)
+    expect(await storage.get('k1')).toBeNull()
+  })
+})
