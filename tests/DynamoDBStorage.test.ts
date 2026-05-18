@@ -143,24 +143,17 @@ describe('DynamoDBStorage', () => {
   })
 
   it('returns null for an entry with an invalid type', async () => {
-    const corrupt = makeEntry('k1') as unknown as Record<string, unknown>
-    corrupt['type'] = 'invalid'
-    // Store it directly in the mock by calling PutItemCommand manually
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const s = new DynamoDBStorage({ tableName: 'llm-cacher', client: client as any })
-    // Inject corrupt entry via a set call with type overridden after serialisation
-    const originalSend = client.send
-    client.send.mockImplementationOnce(async (cmd: { constructor: { name: string }; input: Record<string, unknown> }) => {
-      if (cmd.constructor.name === 'PutItemCommand') {
-        const input = cmd.input as { Item: Record<string, { S?: string }> }
-        // Store a corrupted value where type is 'invalid'
-        const item = { ...input.Item, value: { S: JSON.stringify(corrupt) } }
-        return originalSend({ ...cmd, input: { ...cmd.input, Item: item } } as typeof cmd)
-      }
-      return originalSend(cmd)
+    // Inject a GetItemCommand response that contains an entry with an unknown type.
+    // Spreading an SDK command instance creates a plain object (constructor.name becomes
+    // 'Object'), so the correct approach is to mock the GetItemCommand response directly
+    // rather than intercepting PutItemCommand.
+    const corrupt = JSON.stringify({
+      key: 'k1', type: 'invalid', value: 'x', createdAt: Date.now(), expiresAt: null,
     })
-    await s.set('k1', makeEntry('k1'))
-    expect(await s.get('k1')).toBeNull()
+    client.send.mockImplementationOnce(async () => ({
+      Item: { pk: { S: 'k1' }, value: { S: corrupt } },
+    }))
+    expect(await storage.get('k1')).toBeNull()
   })
 
   it('retries UnprocessedItems from BatchWriteItemCommand until all items are deleted', async () => {
@@ -212,3 +205,4 @@ describe('DynamoDBStorage', () => {
     expect(deleted).toContain('key-b')
   })
 })
+
