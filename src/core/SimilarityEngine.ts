@@ -8,6 +8,7 @@ const INDEX_TYPE_HNSW: IndexType = 'hnsw'
 const DEFAULT_MAX_ELEMENTS = 100_000
 const HNSW_TOP_K = 1
 const HNSW_SPACE = 'cosine'
+const HNSW_GROWTH_FACTOR = 2
 
 export interface SimilarityEngineOptions {
   threshold: number
@@ -69,7 +70,12 @@ export class SimilarityEngine {
       if (this.keyToLabel.has(key)) this.remove(key)
       const label = this.nextLabel++
       const replaceDeleted = this.deletedCount > 0
-      this.getHnsw().addPoint(embedding, label, replaceDeleted)
+      const index = this.getHnsw()
+      // A full index throws on addPoint — grow it instead of silently losing new entries
+      if (!replaceDeleted && index.getCurrentCount() >= index.getMaxElements()) {
+        index.resizeIndex(index.getMaxElements() * HNSW_GROWTH_FACTOR)
+      }
+      index.addPoint(embedding, label, replaceDeleted)
       if (replaceDeleted) this.deletedCount--
       this.labelToKey.set(label, key)
       this.keyToLabel.set(key, label)

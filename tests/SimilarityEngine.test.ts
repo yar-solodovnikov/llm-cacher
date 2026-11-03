@@ -90,6 +90,29 @@ describe('SimilarityEngine — hnsw duplicate key', () => {
   })
 })
 
+describe('SimilarityEngine — hnsw capacity', () => {
+  it('grows the index instead of throwing when maxElements is reached', () => {
+    const engine = new SimilarityEngine({ threshold: 0.9, indexType: 'hnsw', dimensions: 3, maxElements: 2 })
+    engine.add('key-a', [1, 0, 0])
+    engine.add('key-b', [0, 1, 0])
+    expect(() => engine.add('key-c', [0, 0, 1])).not.toThrow()
+    expect(engine.size).toBe(3)
+    expect(engine.findSimilar([0, 0.05, 1])).toBe('key-c')
+    expect(engine.findSimilar([1, 0.05, 0])).toBe('key-a')
+  })
+
+  it('reuses deleted slots before growing', () => {
+    const engine = new SimilarityEngine({ threshold: 0.9, indexType: 'hnsw', dimensions: 3, maxElements: 2 })
+    engine.add('key-a', [1, 0, 0])
+    engine.add('key-b', [0, 1, 0])
+    engine.remove('key-a')
+    engine.add('key-c', [0, 0, 1])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((engine as any).hnswIndex.getMaxElements()).toBe(2)
+    expect(engine.findSimilar([0, 0.05, 1])).toBe('key-c')
+  })
+})
+
 describe.each(['flat', 'hnsw'] as const)('SimilarityEngine — scopes (%s)', (indexType) => {
   const make = () => new SimilarityEngine({ threshold: 0.9, indexType, dimensions: 3 })
 

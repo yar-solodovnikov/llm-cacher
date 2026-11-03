@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@google/genai` and `@mistralai/mistralai` as optional peer dependencies
 
 ### Fixed
+- HNSW index grows (doubles `maxElements`) when full; previously `addPoint` threw past 100 000 entries and, with `onStorageError: 'passthrough'`, new entries silently stopped being semantically indexed
 - Attribution params (`user`, `safety_identifier`, `metadata`, `prompt_cache_key`, `store`, Gemini `config.labels`) are no longer part of the cache key or semantic scope — passing a per-user id previously gave every user a separate cache, so identical questions from different users never hit
 - ESM build: optional peer dependencies were loaded with a bare `require()`, which throws `Dynamic require of "…" is not supported` in the ESM bundle — `storage: 'sqlite'`, `SQLiteStorage`, `RedisStorage` without a client, `DynamoDBStorage`, `LocalEmbedder` and `indexType: 'hnsw'` all failed for `import` users. They are now loaded via `createRequire` in the ESM bundle
 - Gemini: cached responses are restored with the `GenerateContentResponse` class from the same module format the app uses, so `instanceof` checks hold in CommonJS too
