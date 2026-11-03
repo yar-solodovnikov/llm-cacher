@@ -22,6 +22,7 @@ Cache LLM responses with **exact** and **semantic** matching. Works with OpenAI,
 - [Examples](#examples)
 - [API Reference](#api-reference)
 - [Configuration](#configuration)
+- [Limitations](#limitations)
 
 ---
 
@@ -520,6 +521,16 @@ createCachedClient(client, { storage: new MyStorage() })
 ```
 
 ---
+
+## Limitations
+
+- **Only the main generation methods are cached:** OpenAI `chat.completions.create`, Anthropic `messages.create`, Gemini `models.generateContent` / `generateContentStream`, Mistral `chat.complete` / `chat.stream`. Everything else on the client — SDK helpers like Anthropic's `messages.stream()` or OpenAI's `chat.completions.parse()`, the Responses API, Gemini chat sessions — works as usual but uncached.
+- **Cached methods return plain data:** `create()` returns a plain `Promise`, not `APIPromise`, so `.withResponse()` / `.asResponse()` aren't available. Streams come back as an `AsyncGenerator` for `for await`, not as the SDK's `Stream` / `EventStream` (`.toReadableStream()`, `.tee()`, `.controller`, `.getReader()` aren't available).
+- **Hits are replayed as-is:** the original `id`, `created` and `usage` are returned. With `storage: 'memory'`, a hit is the same object that was cached, so mutating it changes the entry.
+- **Streams are cached only when fully consumed.** Identical concurrent requests all miss (no request coalescing).
+- **Semantic caching** indexes text-only prompts, and may serve an answer generated for another user's similar prompt — don't enable it for personalized prompts.
+
+Full details: [Limitations](https://yar-solodovnikov.github.io/llm-cacher/guide/limitations).
 
 ## License
 
