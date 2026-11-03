@@ -48,11 +48,21 @@ export interface CachedMethodOptions {
   extractText?: (params: Params) => string | undefined
   // Params that form the cache key — lets adapters drop transport-only fields
   keyParams?: (params: Params) => Params
+  // Param holding the prompt; everything else (model, temperature, tools...) forms the semantic scope
+  textField?: string
   // Restores SDK class instances from plain cached values (getters are lost after JSON roundtrip)
   hydrate?: Hydrate
 }
 
 const identity: Hydrate = value => value
+const DEFAULT_TEXT_FIELD = 'messages'
+
+// Semantic matches must not cross model or generation params: a prompt sent to another
+// model, or with different tools / response_format, can't reuse the cached answer.
+function semanticScope(keyParams: Params, textField: string): string {
+  const { [textField]: _text, ...rest } = keyParams
+  return KeyBuilder.build(rest)
+}
 
 // Wraps one SDK method whose mode is fixed by the method itself (e.g. Gemini's
 // generateContent vs generateContentStream, Mistral's chat.complete vs chat.stream).
@@ -64,13 +74,16 @@ export function buildCachedMethod(
 ) {
   const extractText = options.extractText ?? extractMessagesText
   const hydrate = options.hydrate ?? identity
+  const textField = options.textField ?? DEFAULT_TEXT_FIELD
 
   return async (params: Params, ...rest: unknown[]) => {
-    const key = KeyBuilder.build(options.keyParams ? options.keyParams(params) : params)
+    const keyParams = options.keyParams ? options.keyParams(params) : params
+    const key = KeyBuilder.build(keyParams)
     const text = extractText(params)
+    const scope = text !== undefined ? semanticScope(keyParams, textField) : undefined
 
     if (mode === ENTRY_TYPE_STREAM) {
-      const cached = await manager.get(key, text)
+      const cached = await manager.get(key, text, scope)
       if (cached?.type === ENTRY_TYPE_STREAM && cached.chunks) return replayStream(cached.chunks, hydrate)
 
       const stream = (await originalMethod(params, ...rest)) as AsyncIterable<unknown>
@@ -81,16 +94,16 @@ export function buildCachedMethod(
           yield chunk
         }
         // Storage errors after full delivery must not propagate to the consumer
-        await manager.set(key, { type: ENTRY_TYPE_STREAM, value: null, chunks }, text).catch(() => undefined)
+        await manager.set(key, { type: ENTRY_TYPE_STREAM, value: null, chunks }, text, scope).catch(() => undefined)
       })()
     }
 
-    const cached = await manager.get(key, text)
+    const cached = await manager.get(key, text, scope)
     if (cached?.type === ENTRY_TYPE_FULL) return hydrate(cached.value)
 
     const response = await originalMethod(params, ...rest)
     // Storage errors must not swallow the response the caller already paid for
-    await manager.set(key, { type: ENTRY_TYPE_FULL, value: response }, text).catch(() => undefined)
+    await manager.set(key, { type: ENTRY_TYPE_FULL, value: response }, text, scope).catch(() => undefined)
     return response
   }
 }

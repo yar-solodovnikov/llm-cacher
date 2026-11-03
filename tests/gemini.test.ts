@@ -73,6 +73,14 @@ describe('createCachedGeminiClient — generateContent', () => {
     expect(generate).toHaveBeenCalledOnce()
   })
 
+  it('treats a config with only transport fields the same as no config', async () => {
+    const generate = vi.fn().mockResolvedValue(toResponse(RESPONSE_DATA))
+    const cached = createCachedGeminiClient(makeClient(generate))
+    await cached.models.generateContent(PARAMS)
+    await cached.models.generateContent({ ...PARAMS, config: { httpOptions: { timeout: 1000 } } })
+    expect(generate).toHaveBeenCalledOnce()
+  })
+
   it('treats generation config as part of the cache key', async () => {
     const generate = vi.fn().mockResolvedValue(toResponse(RESPONSE_DATA))
     const cached = createCachedGeminiClient(makeClient(generate))

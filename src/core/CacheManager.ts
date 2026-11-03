@@ -43,7 +43,8 @@ export class CacheManager {
     }
   }
 
-  async get(key: string, text?: string): Promise<CacheEntry | null> {
+  // `scope` limits semantic matches to entries stored with the same scope (see SimilarityEngine)
+  async get(key: string, text?: string, scope?: string): Promise<CacheEntry | null> {
     try {
       // 1. exact match
       const exact = await this.storage.get(key)
@@ -57,7 +58,7 @@ export class CacheManager {
       // 2. semantic match
       if (text && this.embedder && this.similarity) {
         const embedding = await this.embedder.embed(text)
-        const similarKey = this.similarity.findSimilar(embedding)
+        const similarKey = this.similarity.findSimilar(embedding, scope)
         if (similarKey) {
           const result = await this.storage.get(similarKey)
           // storage returned null → entry expired; remove stale embedding from index
@@ -73,7 +74,7 @@ export class CacheManager {
     }
   }
 
-  async set(key: string, data: Pick<CacheEntry, 'type' | 'value' | 'chunks'>, text?: string): Promise<void> {
+  async set(key: string, data: Pick<CacheEntry, 'type' | 'value' | 'chunks'>, text?: string, scope?: string): Promise<void> {
     try {
       const now = Date.now()
       await this.storage.set(key, {
@@ -85,7 +86,7 @@ export class CacheManager {
 
       if (text && this.embedder && this.similarity) {
         const embedding = await this.embedder.embed(text)
-        this.similarity.add(key, embedding)
+        this.similarity.add(key, embedding, scope)
       }
     } catch (err) {
       if (this.onStorageError === 'passthrough') return

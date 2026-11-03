@@ -242,6 +242,8 @@ createCachedClient(client, {
 
 Semantic caching matches **similar** prompts, not just identical ones. "What is 2+2?" and "What does 2 plus 2 equal?" can share the same cache entry.
 
+Only the prompt may differ: a semantic hit requires the same `model` and the same other parameters (`temperature`, `tools`, `response_format`, `system`, Gemini's `config`, …), so an answer is never reused across models or output formats.
+
 ### Using a local model (no API key)
 
 ```ts

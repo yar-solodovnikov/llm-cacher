@@ -7,6 +7,7 @@ const GEMINI_MODELS_PROP = 'models'
 const GEMINI_GENERATE_PROP = 'generateContent'
 const GEMINI_GENERATE_STREAM_PROP = 'generateContentStream'
 const GEMINI_SDK_MODULE = '@google/genai'
+const GEMINI_TEXT_FIELD = 'contents'
 const DEFAULT_ROLE = 'user'
 
 // Transport-only config fields — must not split the cache key
@@ -21,7 +22,12 @@ export function createCachedGeminiClient<T extends object>(client: T, options: L
 }
 
 export function createCachedGeminiClientFromManager<T extends object>(client: T, manager: CacheManager): T {
-  const methodOptions = { extractText: extractGeminiText, keyParams: geminiKeyParams, hydrate: hydrateGeminiResponse }
+  const methodOptions = {
+    extractText: extractGeminiText,
+    keyParams: geminiKeyParams,
+    textField: GEMINI_TEXT_FIELD,
+    hydrate: hydrateGeminiResponse,
+  }
   return wrapNamespaceMethods(client, GEMINI_MODELS_PROP, {
     [GEMINI_GENERATE_PROP]: original => buildCachedMethod(original, manager, ENTRY_TYPE_FULL, methodOptions),
     [GEMINI_GENERATE_STREAM_PROP]: original => buildCachedMethod(original, manager, ENTRY_TYPE_STREAM, methodOptions),
@@ -33,6 +39,11 @@ export function geminiKeyParams(params: Params): Params {
   if (config == null || typeof config !== 'object') return params
   const rest = { ...(config as Params) }
   for (const field of NON_KEY_CONFIG_FIELDS) delete rest[field]
+  // A config left empty must hash the same as no config at all
+  if (Object.keys(rest).length === 0) {
+    const { config: _config, ...withoutConfig } = params
+    return withoutConfig
+  }
   return { ...params, config: rest }
 }
 

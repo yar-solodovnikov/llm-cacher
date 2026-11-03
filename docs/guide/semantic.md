@@ -11,6 +11,12 @@ Exact caching only hits when prompts are byte-for-byte identical. Semantic cachi
 
 Exact match is always tried first. The semantic search only runs on a miss.
 
+## Scope: only the prompt may differ
+
+Semantic matching compares the prompt text only — `messages` for OpenAI, Anthropic and Mistral, `contents` for Gemini. Every other request parameter must be **identical** for a semantic hit: `model`, `temperature`, `max_tokens`, `tools`, `response_format`, Anthropic's `system`, Gemini's `config`, and so on.
+
+This prevents a cheaper model's answer from being served for a request to a stronger one, and a plain-text answer from being served to a request that expects JSON or a tool call. Streaming and non-streaming requests with the same parameters share a scope.
+
 ## Local model (no API key)
 
 ```bash
