@@ -10,6 +10,7 @@ import type {
 } from '@aws-sdk/client-dynamodb'
 import type { CacheEntry, IStorage } from './IStorage'
 import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from './IStorage'
+import { requireOptional } from '../utils/optionalDeps'
 
 type DynamoCommands = {
   GetItemCommand: typeof GetItemCommand
@@ -45,8 +46,7 @@ export class DynamoDBStorage implements IStorage {
   private readonly ttlAttr: string
 
   constructor(opts: DynamoDBStorageOptions) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const sdk = require('@aws-sdk/client-dynamodb') as typeof import('@aws-sdk/client-dynamodb')
+    const sdk = requireOptional('@aws-sdk/client-dynamodb') as typeof import('@aws-sdk/client-dynamodb')
     this.cmds = sdk
     this.client = opts.client ?? new sdk.DynamoDBClient({ region: opts.region, ...opts.config })
     this.table = opts.tableName

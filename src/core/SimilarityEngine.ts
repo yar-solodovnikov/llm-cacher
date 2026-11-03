@@ -1,4 +1,5 @@
 import { DEFAULT_EMBEDDING_DIMENSIONS } from '../constants'
+import { requireOptional } from '../utils/optionalDeps'
 
 export type IndexType = 'flat' | 'hnsw'
 
@@ -56,8 +57,7 @@ export class SimilarityEngine {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getHnsw(): any {
     if (this.hnswIndex) return this.hnswIndex
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { HierarchicalNSW } = require('hnswlib-node') as typeof import('hnswlib-node')
+    const { HierarchicalNSW } = requireOptional('hnswlib-node') as typeof import('hnswlib-node')
     this.hnswIndex = new HierarchicalNSW(HNSW_SPACE, this.dimensions)
     this.hnswIndex.initIndex({ maxElements: this.maxElements, allowReplaceDeleted: true })
     return this.hnswIndex

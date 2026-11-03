@@ -2,6 +2,7 @@ import { buildManager, buildCachedMethod, wrapNamespaceMethods } from './shared'
 import type { CacheManager } from '../core/CacheManager'
 import type { LlmCacheOptions } from './base'
 import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from '../storage/IStorage'
+import { importOptional } from '../utils/optionalDeps'
 
 const GEMINI_MODELS_PROP = 'models'
 const GEMINI_GENERATE_PROP = 'generateContent'
@@ -100,8 +101,8 @@ type ResponseClass = new () => object
 let responseClassPromise: Promise<ResponseClass | null> | null = null
 
 function loadResponseClass(): Promise<ResponseClass | null> {
-  responseClassPromise ??= import(GEMINI_SDK_MODULE)
-    .then(mod => (mod as { GenerateContentResponse?: ResponseClass }).GenerateContentResponse ?? null)
+  responseClassPromise ??= importOptional<{ GenerateContentResponse?: ResponseClass }>(GEMINI_SDK_MODULE)
+    .then(mod => mod.GenerateContentResponse ?? null)
     .catch(() => null)
   return responseClassPromise
 }

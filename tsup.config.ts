@@ -13,6 +13,12 @@ export default defineConfig({
   dts: true,
   clean: true,
   sourcemap: true,
+  // Lets src/utils/optionalDeps.ts pick the module loader matching each bundle's format
+  esbuildOptions(options, { format }) {
+    options.define = { ...options.define, __ESM_BUILD__: JSON.stringify(format === 'esm') }
+    // the import.meta branch is dead code in the CJS bundle
+    if (format === 'cjs') options.logOverride = { ...options.logOverride, 'empty-import-meta': 'silent' }
+  },
   onSuccess: async () => {
     const file = 'dist/cli.cjs'
     const content = readFileSync(file, 'utf8')

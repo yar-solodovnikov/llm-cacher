@@ -2,6 +2,7 @@ import type { Database } from 'better-sqlite3'
 import type { CacheEntry, IStorage } from './IStorage'
 import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from './IStorage'
 import { DEFAULT_SQLITE_PATH, DEFAULT_TABLE_NAME } from '../constants'
+import { requireOptional } from '../utils/optionalDeps'
 
 export interface SQLiteStorageOptions {
   path?: string
@@ -17,8 +18,7 @@ export class SQLiteStorage implements IStorage {
     if (opts.db) {
       this.db = opts.db
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const BetterSqlite3 = require('better-sqlite3') as typeof import('better-sqlite3')
+      const BetterSqlite3 = requireOptional('better-sqlite3') as typeof import('better-sqlite3')
       this.db = new BetterSqlite3(opts.path ?? DEFAULT_SQLITE_PATH)
     }
     const tableName = opts.tableName ?? DEFAULT_TABLE_NAME
