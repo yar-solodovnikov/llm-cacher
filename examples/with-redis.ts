@@ -14,7 +14,7 @@ const redis = new Redis()
 const openai = createCachedClient(new OpenAI(), {
   ttl: '24h',
   storage: new RedisStorage({ client: redis, keyPrefix: 'example:' }),
-  onStorageError: 'passthrough', // if Redis is down â€” fall through to the API
+  onStorageError: 'passthrough', // if Redis is down — fall through to the API
 })
 
 async function main() {

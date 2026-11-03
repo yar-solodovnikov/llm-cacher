@@ -39,7 +39,7 @@ app.post('/chat', async (req, res) => {
 })
 ```
 
-The middleware attaches `req.withCache(client)` to every request. The TypeScript type for `Request` is augmented automatically â€” no extra imports needed.
+The middleware attaches `req.withCache(client)` to every request. The TypeScript type for `Request` is augmented automatically — no extra imports needed.
 
 ## Hono
 
@@ -61,7 +61,7 @@ app.post('/chat', async (c) => {
 })
 ```
 
-Uses Hono's `ContextVariableMap` augmentation â€” `c.get('withCache')` is fully typed.
+Uses Hono's `ContextVariableMap` augmentation — `c.get('withCache')` is fully typed.
 
 ## NestJS
 

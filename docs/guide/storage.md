@@ -4,7 +4,7 @@ All storage backends implement the same `IStorage` interface, so you can swap th
 
 ## Memory
 
-Built-in, no extra packages needed. Uses an LRU Map â€” oldest entries are evicted when `maxSize` is reached. A background sweep runs every 60 s to clean expired entries.
+Built-in, no extra packages needed. Uses an LRU Map — oldest entries are evicted when `maxSize` is reached. A background sweep runs every 60 s to clean expired entries.
 
 ```ts
 createCachedClient(client, {
@@ -27,7 +27,7 @@ Best for: development, testing, single-process apps where persistence isn't need
 
 ## File
 
-Stores entries as a JSON file. Reads and writes on every access â€” not suitable for high throughput, but great for CLI tools and local scripts.
+Stores entries as a JSON file. Reads and writes on every access — not suitable for high throughput, but great for CLI tools and local scripts.
 
 ```ts
 createCachedClient(client, {
@@ -38,7 +38,7 @@ createCachedClient(client, {
 
 Best for: scripts, CLI tools, one-off jobs.
 
-> **Note:** FileStorage is designed for single-process use. Concurrent writes from multiple processes are not safe â€” the last write wins and may overwrite changes from another process. Use SQLite or Redis for multi-process environments.
+> **Note:** FileStorage is designed for single-process use. Concurrent writes from multiple processes are not safe — the last write wins and may overwrite changes from another process. Use SQLite or Redis for multi-process environments.
 
 ## Redis
 
@@ -65,7 +65,7 @@ Or connect by URL:
 new RedisStorage({ url: 'redis://localhost:6379' })
 ```
 
-TTL is set natively via Redis `PX` â€” no background sweep needed. `clear()` uses `SCAN` internally so it does not block the Redis event loop regardless of dataset size.
+TTL is set natively via Redis `PX` — no background sweep needed. `clear()` uses `SCAN` internally so it does not block the Redis event loop regardless of dataset size.
 
 Best for: multi-process apps, horizontal scaling, high-throughput services.
 

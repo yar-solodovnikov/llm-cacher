@@ -22,7 +22,7 @@ features:
     details: SHA-256 hashes every request. Identical calls are served instantly from cache with zero API calls.
   - icon: 🧠
     title: Semantic match
-    details: Embed prompts and find similar cached responses using cosine similarity or HNSW. "What is 2+2?" and "What does 2 plus 2 equal?" share the same cache entry.
+    details: Embed prompts and find similar cached responses using cosine similarity or HNSW. "How do I reset my password?" and "I forgot my password, how do I reset it?" share the same cache entry.
   - icon: 🗄️
     title: Five storage backends
     details: Memory, file, Redis, SQLite, DynamoDB — pick what fits your infrastructure. All are optional peer dependencies.

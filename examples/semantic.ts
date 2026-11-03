@@ -26,19 +26,20 @@ async function ask(question: string) {
     messages: [{ role: 'user', content: question }],
   })
   const elapsed = Date.now() - start
-  const source = elapsed < 50 ? 'cache hit âœ“' : 'API call'
+  const source = elapsed < 50 ? 'cache hit ✓' : 'API call'
   console.log(`Q: ${question}`)
   console.log(`A: ${res.choices[0].message.content}`)
-  console.log(`   ${elapsed}ms â€” ${source}\n`)
+  console.log(`   ${elapsed}ms — ${source}\n`)
 }
 
 async function main() {
   console.log('Initializing embedder (downloads model on first run)...\n')
 
-  await ask('What is 2+2?')                   // API call â€” stored in cache
-  await ask('What is 2+2?')                   // exact cache hit
-  await ask('What does 2 plus 2 equal?')      // semantic hit â€” different phrasing
-  await ask('Calculate two plus two.')        // semantic hit â€” different phrasing
+  await ask('How do I reset my password?')               // API call — stored in cache
+  await ask('How do I reset my password?')               // exact cache hit
+  await ask('How can I reset my password?')              // semantic hit (similarity 0.99)
+  await ask('I forgot my password, how do I reset it?')  // semantic hit (similarity 0.95)
+  await ask('How do I delete my account?')               // different question (0.63) — API call
 }
 
 main().catch(console.error)
