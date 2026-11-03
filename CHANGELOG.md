@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Docs: the semantic caching example ("What is 2+2?" / "What does 2 plus 2 equal?") does not actually match at the default threshold — the real similarity is 0.854. Replaced it with pairs measured to hit, and added a "Choosing a threshold" section showing why the threshold shouldn't be lowered casually ("What is 2+2?" vs "What is 2+3?" scores 0.905)
+- Docs: em/en dashes shown as "â€”" on the docs site because of a file encoding error
+
 ## [1.1.0] - 2026-11-03
 
 ### Added

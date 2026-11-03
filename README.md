@@ -241,7 +241,7 @@ createCachedClient(client, {
 
 ## Semantic Caching
 
-Semantic caching matches **similar** prompts, not just identical ones. "What is 2+2?" and "What does 2 plus 2 equal?" can share the same cache entry.
+Semantic caching matches **similar** prompts, not just identical ones. "How do I reset my password?" and "I forgot my password, how do I reset it?" can share the same cache entry. How close counts as "similar" is set by `threshold` — see [Choosing a threshold](https://yar-solodovnikov.github.io/llm-cacher/guide/semantic#choosing-a-threshold).
 
 Only the prompt may differ: a semantic hit requires the same `model` and the same other parameters (`temperature`, `tools`, `response_format`, `system`, Gemini's `config`, …), so an answer is never reused across models or output formats.
 

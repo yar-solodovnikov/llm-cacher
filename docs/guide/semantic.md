@@ -2,7 +2,7 @@
 
 Exact caching only hits when prompts are byte-for-byte identical. Semantic caching goes further — it embeds prompts into vectors and finds similar cached responses using cosine similarity.
 
-> "What is 2+2?" and "What does 2 plus 2 equal?" will share the same cache entry.
+> "How do I reset my password?" and "I forgot my password, how do I reset it?" share the same cache entry.
 
 ## How it works
 
@@ -10,6 +10,25 @@ Exact caching only hits when prompts are byte-for-byte identical. Semantic cachi
 2. On **cache get**: the incoming prompt is embedded, then compared against all stored vectors. If the nearest match exceeds the `threshold`, that cached response is returned.
 
 Exact match is always tried first. The semantic search only runs on a miss.
+
+## Choosing a threshold
+
+`threshold` is the minimum cosine similarity between two prompt embeddings for a cache hit. The default, `0.92`, is deliberately strict: a semantic hit returns an answer written for a *different* prompt, so a false hit is worse than a miss.
+
+Measured with `LocalEmbedder` (`all-MiniLM-L6-v2`), on the text the cache actually embeds (`user: <prompt>`):
+
+| Prompt A | Prompt B | Similarity | At `0.92` |
+|---|---|---|---|
+| How do I reset my password? | How can I reset my password? | 0.994 | hit |
+| How do I reset my password? | I forgot my password, how do I reset it? | 0.949 | hit |
+| What is 2+2? | What does 2 plus 2 equal? | 0.854 | miss |
+| What is 2+2? | What is 2+3? | **0.905** | miss |
+| How do I reset my password? | How do I delete my account? | 0.634 | miss |
+| How do I reset my password? | How do I change my email address? | 0.497 | miss |
+
+The "2+2" rows are the reason not to lower the threshold casually: a paraphrase of the same question scores *lower* than a different question that changes one digit. Short prompts where a single number, name or date changes the answer are a poor fit for semantic caching at any threshold.
+
+To tune it for your traffic, log the similarity of real prompt pairs and check where true paraphrases and different questions separate. Scores depend on the embedder — `OpenAIEmbedder` produces a different distribution, so measure again if you switch.
 
 ## Scope: only the prompt may differ
 
