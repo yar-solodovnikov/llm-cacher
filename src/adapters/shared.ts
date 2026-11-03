@@ -25,11 +25,11 @@ export function buildManager(options: LlmCacheOptions): CacheManager {
   })
 }
 
-async function* replayStream(chunks: unknown[]): AsyncGenerator<unknown> {
-  for (const chunk of chunks) yield chunk
+async function* replayStream(chunks: unknown[], hydrate: Hydrate): AsyncGenerator<unknown> {
+  for (const chunk of chunks) yield await hydrate(chunk)
 }
 
-function extractText(params: Record<string, unknown>): string | undefined {
+export function extractMessagesText(params: Record<string, unknown>): string | undefined {
   const messages = params.messages
   if (!Array.isArray(messages) || messages.length === 0) return undefined
   // null/non-object items or non-string content (vision, tool results) → skip semantic indexing
@@ -37,19 +37,68 @@ function extractText(params: Record<string, unknown>): string | undefined {
   return (messages as { role: string; content: string }[]).map(m => `${m.role}: ${m.content}`).join('\n')
 }
 
-export function buildCachedCreate(
-  originalCreate: (...args: unknown[]) => unknown,
+type Params = Record<string, unknown>
+type Hydrate = (value: unknown) => unknown
+type OriginalMethod = (...args: unknown[]) => unknown
+
+export type CacheMode = typeof ENTRY_TYPE_FULL | typeof ENTRY_TYPE_STREAM
+
+export interface CachedMethodOptions {
+  // Text used for semantic matching; undefined disables semantic lookup for the request
+  extractText?: (params: Params) => string | undefined
+  // Params that form the cache key — lets adapters drop transport-only fields
+  keyParams?: (params: Params) => Params
+  // Param holding the prompt; everything else (model, temperature, tools...) forms the semantic scope
+  textField?: string
+  // Restores SDK class instances from plain cached values (getters are lost after JSON roundtrip)
+  hydrate?: Hydrate
+}
+
+const identity: Hydrate = value => value
+const DEFAULT_TEXT_FIELD = 'messages'
+
+// Attribution / tracking params never change the generated answer, so they must not split
+// the cache — otherwise apps that pass a per-user id would get a separate cache per user.
+export const TRACKING_PARAMS = ['user', 'safety_identifier', 'metadata', 'prompt_cache_key', 'store'] as const
+
+function withoutTrackingParams(params: Params): Params {
+  if (!TRACKING_PARAMS.some(field => field in params)) return params
+  const rest = { ...params }
+  for (const field of TRACKING_PARAMS) delete rest[field]
+  return rest
+}
+
+// Semantic matches must not cross model or generation params: a prompt sent to another
+// model, or with different tools / response_format, can't reuse the cached answer.
+function semanticScope(keyParams: Params, textField: string): string {
+  const { [textField]: _text, ...rest } = keyParams
+  return KeyBuilder.build(rest)
+}
+
+// Wraps one SDK method whose mode is fixed by the method itself (e.g. Gemini's
+// generateContent vs generateContentStream, Mistral's chat.complete vs chat.stream).
+export function buildCachedMethod(
+  originalMethod: OriginalMethod,
   manager: CacheManager,
+  mode: CacheMode,
+  options: CachedMethodOptions = {},
 ) {
-  return async (params: Record<string, unknown>) => {
-    const key = KeyBuilder.build(params)
+  const extractText = options.extractText ?? extractMessagesText
+  const hydrate = options.hydrate ?? identity
+  const textField = options.textField ?? DEFAULT_TEXT_FIELD
+
+  return async (params: Params, ...rest: unknown[]) => {
+    const baseParams = withoutTrackingParams(params)
+    const keyParams = options.keyParams ? options.keyParams(baseParams) : baseParams
+    const key = KeyBuilder.build(keyParams)
     const text = extractText(params)
+    const scope = text !== undefined ? semanticScope(keyParams, textField) : undefined
 
-    if (params.stream) {
-      const cached = await manager.get(key, text)
-      if (cached?.type === ENTRY_TYPE_STREAM && cached.chunks) return replayStream(cached.chunks)
+    if (mode === ENTRY_TYPE_STREAM) {
+      const cached = await manager.get(key, text, scope)
+      if (cached?.type === ENTRY_TYPE_STREAM && cached.chunks) return replayStream(cached.chunks, hydrate)
 
-      const stream = (await originalCreate(params)) as AsyncIterable<unknown>
+      const stream = (await originalMethod(params, ...rest)) as AsyncIterable<unknown>
       return (async function* () {
         const chunks: unknown[] = []
         for await (const chunk of stream) {
@@ -57,16 +106,62 @@ export function buildCachedCreate(
           yield chunk
         }
         // Storage errors after full delivery must not propagate to the consumer
-        await manager.set(key, { type: ENTRY_TYPE_STREAM, value: null, chunks }, text).catch(() => undefined)
+        await manager.set(key, { type: ENTRY_TYPE_STREAM, value: null, chunks }, text, scope).catch(() => undefined)
       })()
     }
 
-    const cached = await manager.get(key, text)
-    if (cached?.type === ENTRY_TYPE_FULL) return cached.value
+    const cached = await manager.get(key, text, scope)
+    if (cached?.type === ENTRY_TYPE_FULL) return hydrate(cached.value)
 
-    const response = await originalCreate(params)
+    const response = await originalMethod(params, ...rest)
     // Storage errors must not swallow the response the caller already paid for
-    await manager.set(key, { type: ENTRY_TYPE_FULL, value: response }, text).catch(() => undefined)
+    await manager.set(key, { type: ENTRY_TYPE_FULL, value: response }, text, scope).catch(() => undefined)
     return response
   }
+}
+
+// OpenAI / Anthropic style: a single create() whose mode is selected by `params.stream`
+export function buildCachedCreate(
+  originalCreate: OriginalMethod,
+  manager: CacheManager,
+) {
+  const full = buildCachedMethod(originalCreate, manager, ENTRY_TYPE_FULL)
+  const stream = buildCachedMethod(originalCreate, manager, ENTRY_TYPE_STREAM)
+  return (params: Params, ...rest: unknown[]) => (params.stream ? stream(params, ...rest) : full(params, ...rest))
+}
+
+// Reads a property that is not cached. SDK helpers (e.g. Anthropic's messages.stream) call
+// sibling methods through `this` and rely on the SDK's own return types such as APIPromise —
+// bound to the original object they keep working, just without caching.
+export function passThrough(target: object, prop: string | symbol): unknown {
+  const value = Reflect.get(target, prop, target)
+  if (typeof value !== 'function') return value
+  // Proxy invariant: a non-configurable, read-only property must be returned as is
+  const descriptor = Object.getOwnPropertyDescriptor(target, prop)
+  if (descriptor && !descriptor.configurable && !descriptor.writable) return value
+  return value.bind(target)
+}
+
+// Proxies `client[namespace][method]` for each method in `wrappers`, passing everything else through
+export function wrapNamespaceMethods<T extends object>(
+  client: T,
+  namespace: string,
+  wrappers: Record<string, (original: OriginalMethod) => (params: Params, ...rest: unknown[]) => unknown>,
+): T {
+  return new Proxy(client, {
+    get(target, prop) {
+      if (prop !== namespace) return passThrough(target, prop)
+
+      const ns = Reflect.get(target, prop, target) as Record<string, unknown>
+      return new Proxy(ns, {
+        get(nsTarget, nsProp) {
+          const wrap = typeof nsProp === 'string' && Object.prototype.hasOwnProperty.call(wrappers, nsProp) ? wrappers[nsProp] : undefined
+          if (!wrap) return passThrough(nsTarget, nsProp)
+
+          const original = (Reflect.get(nsTarget, nsProp, nsTarget) as OriginalMethod).bind(nsTarget)
+          return wrap(original)
+        },
+      })
+    },
+  })
 }

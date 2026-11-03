@@ -1,6 +1,6 @@
 {
   "name": "llm-cacher",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "description": "Cache LLM responses — exact and semantic matching",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -39,6 +39,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:dist": "node tests/smoke/smoke.mjs && node tests/smoke/smoke.cjs",
     "lint": "eslint src tests",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
@@ -52,6 +53,9 @@
     "anthropic",
     "claude",
     "gpt",
+    "mistral",
+    "google",
+    "gemini",
     "ai",
     "ai-cache",
     "llm-cache",
@@ -85,7 +89,9 @@
     "@anthropic-ai/sdk": "^0.96.0",
     "@aws-sdk/client-dynamodb": "^3.1046.0",
     "@eslint/js": "^10.0.0",
+    "@google/genai": "^2.32.0",
     "@huggingface/transformers": "^4.2.0",
+    "@mistralai/mistralai": "^3.5.0",
     "@nestjs/common": "^11.1.21",
     "@nestjs/core": "^11.1.21",
     "@types/better-sqlite3": "^7.6.13",
@@ -107,7 +113,9 @@
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.20.0",
     "@aws-sdk/client-dynamodb": ">=3.0.0",
+    "@google/genai": ">=1.0.0",
     "@huggingface/transformers": ">=3.0.0",
+    "@mistralai/mistralai": ">=1.0.0",
     "@nestjs/common": ">=10.0.0",
     "better-sqlite3": ">=9.0.0",
     "express": ">=4.0.0",
@@ -145,6 +153,12 @@
       "optional": true
     },
     "hono": {
+      "optional": true
+    },
+    "@google/genai": {
+      "optional": true
+    },
+    "@mistralai/mistralai": {
       "optional": true
     }
   },

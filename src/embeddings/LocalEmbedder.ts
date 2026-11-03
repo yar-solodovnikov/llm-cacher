@@ -1,5 +1,6 @@
 import type { IEmbedder } from './IEmbedder'
 import { DEFAULT_EMBEDDING_DIMENSIONS } from '../constants'
+import { requireOptional } from '../utils/optionalDeps'
 
 // all-MiniLM-L6-v2 — 384 dims, ~25MB, no API key needed
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2'
@@ -25,8 +26,7 @@ export class LocalEmbedder implements IEmbedder {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getPipeline(): Promise<any> {
     if (this.pipelinePromise) return this.pipelinePromise
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { pipeline } = require('@huggingface/transformers') as typeof import('@huggingface/transformers')
+    const { pipeline } = requireOptional('@huggingface/transformers') as typeof import('@huggingface/transformers')
     this.pipelinePromise = pipeline(PIPELINE_TASK, this.model).catch((err: unknown) => {
       this.pipelinePromise = null
       throw err

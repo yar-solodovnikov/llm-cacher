@@ -1,5 +1,24 @@
 ﻿# Framework Integrations
 
+## Supported clients
+
+`req.withCache(client)`, `c.get('withCache')(client)` and `LlmCacheService.wrap(client)` accept a client from any supported SDK — OpenAI, Anthropic, Gemini (`@google/genai`) or Mistral. The SDK is detected from the client's shape:
+
+```ts
+const openai = req.withCache(new OpenAI())
+const anthropic = req.withCache(new Anthropic())
+const gemini = req.withCache(new GoogleGenAI({}))
+const mistral = req.withCache(new Mistral({ apiKey }))
+```
+
+All clients wrapped by one middleware or module share one cache. For an OpenAI-compatible SDK or a custom client whose shape is ambiguous, pass the provider explicitly — `'openai' | 'anthropic' | 'gemini' | 'mistral'`:
+
+```ts
+const client = req.withCache(new SomeCompatibleSDK(), 'openai')
+```
+
+A client that matches no supported SDK throws instead of being passed through uncached.
+
 ## Express
 
 ```ts
@@ -95,5 +114,5 @@ export class ChatService {
 }
 ```
 
-`LlmCacheService.wrap(client)` wraps any LLM client with caching using the options from `forRoot`.
+`LlmCacheService.wrap(client, provider?)` wraps an OpenAI, Anthropic, Gemini or Mistral client with caching using the options from `forRoot` — see [Supported clients](#supported-clients).
 

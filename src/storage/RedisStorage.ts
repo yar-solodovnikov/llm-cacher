@@ -1,6 +1,7 @@
 import type { Redis, RedisOptions } from 'ioredis'
 import type { CacheEntry, IStorage } from './IStorage'
-import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from './IStorage'
+import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM, isLiveEntry, parseEntry } from './IStorage'
+import { requireOptional } from '../utils/optionalDeps'
 
 export interface RedisStorageOptions {
   url?: string
@@ -23,8 +24,7 @@ export class RedisStorage implements IStorage {
       this.client = opts.client
     } else {
       // dynamic import to keep ioredis optional
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const IORedis = require('ioredis') as typeof import('ioredis').default
+      const IORedis = requireOptional('ioredis') as typeof import('ioredis').default
       this.client = opts.url ? new IORedis(opts.url, opts.options ?? {}) : new IORedis(opts.options ?? {})
     }
     this.keyPrefix = opts.keyPrefix ?? DEFAULT_KEY_PREFIX
@@ -66,6 +66,21 @@ export class RedisStorage implements IStorage {
       const [next, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', REDIS_SCAN_COUNT)
       cursor = next
       if (keys.length > 0) await this.client.del(...keys)
+    } while (cursor !== REDIS_INITIAL_CURSOR)
+  }
+
+  async *entries(): AsyncIterable<CacheEntry> {
+    const pattern = `${this.keyPrefix}*`
+    let cursor = REDIS_INITIAL_CURSOR
+    do {
+      const [next, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', REDIS_SCAN_COUNT)
+      cursor = next
+      if (keys.length === 0) continue
+      const now = Date.now()
+      for (const raw of await this.client.mget(...keys)) {
+        const entry = raw ? parseEntry(raw) : null
+        if (entry && isLiveEntry(entry, now)) yield entry
+      }
     } while (cursor !== REDIS_INITIAL_CURSOR)
   }
 

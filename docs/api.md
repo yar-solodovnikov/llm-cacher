@@ -20,6 +20,26 @@ import { createCachedAnthropicClient } from 'llm-cacher'
 const anthropic = createCachedAnthropicClient(new Anthropic(), { ttl: '24h' })
 ```
 
+## `createCachedGeminiClient(client, options?)`
+
+Wraps a `GoogleGenAI` client from `@google/genai`. Intercepts `client.models.generateContent` and `client.models.generateContentStream`. Cached responses are restored as `GenerateContentResponse` instances so getters like `.text` keep working.
+
+```ts
+import { createCachedGeminiClient } from 'llm-cacher'
+
+const ai = createCachedGeminiClient(new GoogleGenAI({}), { ttl: '24h' })
+```
+
+## `createCachedMistralClient(client, options?)`
+
+Wraps a `Mistral` client from `@mistralai/mistralai`. Intercepts `client.chat.complete` and `client.chat.stream`.
+
+```ts
+import { createCachedMistralClient } from 'llm-cacher'
+
+const mistral = createCachedMistralClient(new Mistral({ apiKey }), { ttl: '24h' })
+```
+
 ## `LlmCacheOptions`
 
 | Option | Type | Default | Description |
@@ -38,6 +58,8 @@ const anthropic = createCachedAnthropicClient(new Anthropic(), { ttl: '24h' })
 | `embedder` | `IEmbedder` | required | The embedding model to use. |
 | `threshold` | `number` | `0.92` | Minimum cosine similarity (0â€“1) to count as a hit. |
 | `indexType` | `'flat' \| 'hnsw'` | `'flat'` | Search index. Use `'hnsw'` for 10k+ entries. |
+| `restore` | `boolean` | `true` | Rebuild the in-memory index from the storage on the first semantic lookup. Reads every stored entry once — see [Limitations](./guide/limitations#semantic-caching). |
+| `restoreLimit` | `number` | unlimited | Stop restoring after this many entries (in no particular order). |
 
 ## Storage classes
 

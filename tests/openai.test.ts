@@ -206,3 +206,13 @@ describe('createCachedClient — storage passthrough', () => {
     expect(collected).toEqual(CHUNKS)
   })
 })
+
+describe('createCachedClient — request options', () => {
+  it('forwards the second argument to the real client', async () => {
+    const create = vi.fn().mockResolvedValue(RESPONSE)
+    const cached = createCachedClient(makeClient(create))
+    const options = { timeout: 5000 }
+    await cached.chat.completions.create(PARAMS, options)
+    expect(create).toHaveBeenCalledWith(PARAMS, options)
+  })
+})

@@ -1,4 +1,5 @@
 import { DEFAULT_EMBEDDING_DIMENSIONS } from '../constants'
+import { requireOptional } from '../utils/optionalDeps'
 
 export type IndexType = 'flat' | 'hnsw'
 
@@ -7,6 +8,7 @@ const INDEX_TYPE_HNSW: IndexType = 'hnsw'
 const DEFAULT_MAX_ELEMENTS = 100_000
 const HNSW_TOP_K = 1
 const HNSW_SPACE = 'cosine'
+const HNSW_GROWTH_FACTOR = 2
 
 export interface SimilarityEngineOptions {
   threshold: number
@@ -29,6 +31,9 @@ function cosineSimilarity(a: number[], b: number[]): number {
 export class SimilarityEngine {
   private readonly threshold: number
   private readonly indexType: IndexType
+
+  // Entries only match queries from the same scope (e.g. same model + generation params)
+  private keyToScope = new Map<string, string | undefined>()
 
   // flat index
   private flatEntries = new Map<string, number[]>()
@@ -53,29 +58,35 @@ export class SimilarityEngine {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getHnsw(): any {
     if (this.hnswIndex) return this.hnswIndex
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { HierarchicalNSW } = require('hnswlib-node') as typeof import('hnswlib-node')
+    const { HierarchicalNSW } = requireOptional('hnswlib-node') as typeof import('hnswlib-node')
     this.hnswIndex = new HierarchicalNSW(HNSW_SPACE, this.dimensions)
     this.hnswIndex.initIndex({ maxElements: this.maxElements, allowReplaceDeleted: true })
     return this.hnswIndex
   }
 
-  add(key: string, embedding: number[]): void {
+  add(key: string, embedding: number[], scope?: string): void {
     if (this.indexType === INDEX_TYPE_HNSW) {
       // Evict existing entry first to avoid a dangling labelToKey pointer
       if (this.keyToLabel.has(key)) this.remove(key)
       const label = this.nextLabel++
       const replaceDeleted = this.deletedCount > 0
-      this.getHnsw().addPoint(embedding, label, replaceDeleted)
+      const index = this.getHnsw()
+      // A full index throws on addPoint — grow it instead of silently losing new entries
+      if (!replaceDeleted && index.getCurrentCount() >= index.getMaxElements()) {
+        index.resizeIndex(index.getMaxElements() * HNSW_GROWTH_FACTOR)
+      }
+      index.addPoint(embedding, label, replaceDeleted)
       if (replaceDeleted) this.deletedCount--
       this.labelToKey.set(label, key)
       this.keyToLabel.set(key, label)
     } else {
       this.flatEntries.set(key, embedding)
     }
+    this.keyToScope.set(key, scope)
   }
 
   remove(key: string): void {
+    this.keyToScope.delete(key)
     if (this.indexType === INDEX_TYPE_HNSW) {
       const label = this.keyToLabel.get(key)
       if (label !== undefined) {
@@ -89,18 +100,19 @@ export class SimilarityEngine {
     }
   }
 
-  findSimilar(queryEmbedding: number[]): string | null {
+  findSimilar(queryEmbedding: number[], scope?: string): string | null {
     if (this.indexType === INDEX_TYPE_HNSW) {
-      return this.findHnsw(queryEmbedding)
+      return this.findHnsw(queryEmbedding, scope)
     }
-    return this.findFlat(queryEmbedding)
+    return this.findFlat(queryEmbedding, scope)
   }
 
-  private findFlat(queryEmbedding: number[]): string | null {
+  private findFlat(queryEmbedding: number[], scope: string | undefined): string | null {
     let bestKey: string | null = null
     let bestScore = -Infinity
 
     for (const [key, embedding] of this.flatEntries) {
+      if (this.keyToScope.get(key) !== scope) continue
       const score = cosineSimilarity(queryEmbedding, embedding)
       if (score > bestScore) {
         bestScore = score
@@ -111,9 +123,13 @@ export class SimilarityEngine {
     return bestScore >= this.threshold ? bestKey : null
   }
 
-  private findHnsw(queryEmbedding: number[]): string | null {
+  private findHnsw(queryEmbedding: number[], scope: string | undefined): string | null {
     if (this.keyToLabel.size === 0) return null
-    const result = this.getHnsw().searchKnn(queryEmbedding, HNSW_TOP_K)
+    const inScope = (label: number) => {
+      const key = this.labelToKey.get(label)
+      return key !== undefined && this.keyToScope.get(key) === scope
+    }
+    const result = this.getHnsw().searchKnn(queryEmbedding, HNSW_TOP_K, inScope)
     if (!result.neighbors.length) return null
     const label = result.neighbors[0]
     // HNSW cosine distance = 1 - similarity

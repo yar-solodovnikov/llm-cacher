@@ -38,6 +38,12 @@ export default defineConfig({
           { text: 'CLI', link: '/guide/cli' },
         ],
       },
+      {
+        text: 'Reference',
+        items: [
+          { text: 'Limitations', link: '/guide/limitations' },
+        ],
+      },
       { text: 'API Reference', link: '/api' },
     ],
 

@@ -1,4 +1,5 @@
 import type { CacheEntry, IStorage } from './IStorage'
+import { isLiveEntry } from './IStorage'
 
 export interface MemoryStorageOptions {
   maxSize?: number
@@ -52,6 +53,14 @@ export class MemoryStorage implements IStorage {
 
   async clear(): Promise<void> {
     this.store.clear()
+  }
+
+  async *entries(): AsyncIterable<CacheEntry> {
+    const now = Date.now()
+    // snapshot — the store may change while the consumer awaits between items
+    for (const entry of [...this.store.values()]) {
+      if (isLiveEntry(entry, now)) yield entry
+    }
   }
 
   get size(): number {

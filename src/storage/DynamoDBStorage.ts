@@ -9,7 +9,8 @@ import type {
   BatchWriteItemCommand,
 } from '@aws-sdk/client-dynamodb'
 import type { CacheEntry, IStorage } from './IStorage'
-import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from './IStorage'
+import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM, isLiveEntry, parseEntry } from './IStorage'
+import { requireOptional } from '../utils/optionalDeps'
 
 type DynamoCommands = {
   GetItemCommand: typeof GetItemCommand
@@ -34,6 +35,7 @@ const DEFAULT_VALUE_ATTRIBUTE = 'value'
 const DEFAULT_TTL_ATTRIBUTE = 'ttl'
 const DYNAMODB_BATCH_WRITE_LIMIT = 25
 const DYNAMO_KEY_ALIAS = '#k'
+const DYNAMO_VALUE_ALIAS = '#v'
 const MS_PER_SECOND = 1_000
 
 export class DynamoDBStorage implements IStorage {
@@ -45,8 +47,7 @@ export class DynamoDBStorage implements IStorage {
   private readonly ttlAttr: string
 
   constructor(opts: DynamoDBStorageOptions) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const sdk = require('@aws-sdk/client-dynamodb') as typeof import('@aws-sdk/client-dynamodb')
+    const sdk = requireOptional('@aws-sdk/client-dynamodb') as typeof import('@aws-sdk/client-dynamodb')
     this.cmds = sdk
     this.client = opts.client ?? new sdk.DynamoDBClient({ region: opts.region, ...opts.config })
     this.table = opts.tableName
@@ -95,6 +96,29 @@ export class DynamoDBStorage implements IStorage {
         Key: { [this.keyAttr]: { S: key } },
       }),
     )
+  }
+
+  async *entries(): AsyncIterable<CacheEntry> {
+    let lastKey: Record<string, AttributeValue> | undefined
+
+    do {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result: any = await this.client.send(new this.cmds.ScanCommand({
+        TableName: this.table,
+        ProjectionExpression: DYNAMO_VALUE_ALIAS,
+        ExpressionAttributeNames: { [DYNAMO_VALUE_ALIAS]: this.valueAttr },
+        ExclusiveStartKey: lastKey,
+      }))
+
+      const now = Date.now()
+      for (const item of (result.Items ?? []) as Record<string, AttributeValue>[]) {
+        const raw = item[this.valueAttr]?.S
+        const entry = raw ? parseEntry(raw) : null
+        if (entry && isLiveEntry(entry, now)) yield entry
+      }
+
+      lastKey = result.LastEvaluatedKey as Record<string, AttributeValue> | undefined
+    } while (lastKey !== undefined)
   }
 
   async clear(): Promise<void> {

@@ -5,7 +5,7 @@
 [![license](https://img.shields.io/npm/l/llm-cacher.svg)](https://github.com/yar-solodovnikov/llm-cacher/blob/main/LICENSE)
 [![CI](https://github.com/yar-solodovnikov/llm-cacher/actions/workflows/ci.yml/badge.svg)](https://github.com/yar-solodovnikov/llm-cacher/actions/workflows/ci.yml)
 
-Cache LLM responses with **exact** and **semantic** matching. Works with OpenAI, Anthropic, and any SDK that follows a similar API shape. Supports in-memory, file, Redis, SQLite, and DynamoDB storage backends.
+Cache LLM responses with **exact** and **semantic** matching. Works with OpenAI, Anthropic, Gemini, Mistral, and any SDK that follows a similar API shape. Supports in-memory, file, Redis, SQLite, and DynamoDB storage backends.
 
 ## Table of Contents
 
@@ -22,6 +22,7 @@ Cache LLM responses with **exact** and **semantic** matching. Works with OpenAI,
 - [Examples](#examples)
 - [API Reference](#api-reference)
 - [Configuration](#configuration)
+- [Limitations](#limitations)
 
 ---
 
@@ -48,6 +49,10 @@ npm install @huggingface/transformers
 
 # Semantic caching with OpenAI embeddings
 npm install openai
+
+# Gemini / Mistral adapters — install the SDK you use
+npm install @google/genai
+npm install @mistralai/mistralai
 
 # HNSW index (only needed for 10 000+ cached entries)
 npm install hnswlib-node
@@ -99,11 +104,50 @@ const msg = await anthropic.messages.create({
 })
 ```
 
+### Gemini
+
+```ts
+import { GoogleGenAI } from '@google/genai'
+import { createCachedGeminiClient } from 'llm-cacher'
+
+const ai = createCachedGeminiClient(new GoogleGenAI({}), {
+  ttl: '24h',
+  storage: 'sqlite',
+})
+
+const res = await ai.models.generateContent({
+  model: 'gemini-2.5-flash',
+  contents: 'Hello!',
+})
+console.log(res.text) // getters work on cache hits too
+```
+
+Both `generateContent` and `generateContentStream` are cached.
+
+### Mistral
+
+```ts
+import { Mistral } from '@mistralai/mistralai'
+import { createCachedMistralClient } from 'llm-cacher'
+
+const mistral = createCachedMistralClient(new Mistral({ apiKey: process.env.MISTRAL_API_KEY }), {
+  ttl: '24h',
+  storage: 'sqlite',
+})
+
+const res = await mistral.chat.complete({
+  model: 'mistral-large-latest',
+  messages: [{ role: 'user', content: 'Hello!' }],
+})
+```
+
+Both `chat.complete` and `chat.stream` are cached.
+
 ---
 
 ## How It Works
 
-Requests are cached by a **SHA-256 hash** of the request parameters (model, messages, temperature, etc.). The `stream` flag is excluded from the key so streaming and non-streaming calls share the same cache entry.
+Requests are cached by a **SHA-256 hash** of the request parameters (model, messages, temperature, etc.). The `stream` flag is excluded from the key so streaming and non-streaming calls share the same cache entry. Attribution params that don't affect the answer — `user`, `safety_identifier`, `metadata`, `prompt_cache_key`, `store` (and Gemini's `config.labels`) — are excluded too, so a per-user id doesn't split the cache.
 
 - **Cache hit**: the response is returned immediately without calling the LLM API.
 - **Cache miss**: the request goes to the API, the response is stored, then returned.
@@ -199,6 +243,8 @@ createCachedClient(client, {
 
 Semantic caching matches **similar** prompts, not just identical ones. "What is 2+2?" and "What does 2 plus 2 equal?" can share the same cache entry.
 
+Only the prompt may differ: a semantic hit requires the same `model` and the same other parameters (`temperature`, `tools`, `response_format`, `system`, Gemini's `config`, …), so an answer is never reused across models or output formats.
+
 ### Using a local model (no API key)
 
 ```ts
@@ -230,11 +276,15 @@ createCachedClient(client, {
 })
 ```
 
-`indexType: 'hnsw'` is recommended when you expect more than ~10 000 cached entries.
+`indexType: 'hnsw'` is recommended when you expect more than ~10 000 cached entries. The index grows automatically when it fills up.
+
+Embeddings are stored with each entry, so after a restart the semantic index is rebuilt from a persistent backend (SQLite, file, Redis, DynamoDB) on the first semantic lookup.
 
 ---
 
 ## Framework Integrations
+
+`withCache` / `wrap` accept an OpenAI, Anthropic, Gemini or Mistral client — the SDK is detected from the client's shape (pass `'openai' | 'anthropic' | 'gemini' | 'mistral'` as the second argument to set it explicitly). A client that matches no supported SDK throws instead of being passed through uncached.
 
 ### Express
 
@@ -384,6 +434,14 @@ Wraps any OpenAI-compatible client with caching. Returns a `Proxy` with the same
 
 Same as above but for Anthropic's `messages.create`.
 
+### `createCachedGeminiClient(client, options?)`
+
+For `@google/genai` — caches `models.generateContent` and `models.generateContentStream`. Cached responses are restored as `GenerateContentResponse` instances. `config.httpOptions` and `config.abortSignal` are excluded from the cache key.
+
+### `createCachedMistralClient(client, options?)`
+
+For `@mistralai/mistralai` — caches `chat.complete` and `chat.stream`.
+
 ### `LlmCacheOptions`
 
 | Option | Type | Default | Description |
@@ -402,6 +460,8 @@ Same as above but for Anthropic's `messages.create`.
 | `embedder` | `IEmbedder` | required | Embedding model to use. |
 | `threshold` | `number` | `0.92` | Minimum cosine similarity (0–1) to count as a cache hit. |
 | `indexType` | `'flat' \| 'hnsw'` | `'flat'` | Search index. Use `'hnsw'` for large caches (10k+ entries). |
+| `restore` | `boolean` | `true` | Rebuild the in-memory index from the storage on the first semantic lookup. Reads every stored entry once — see [Limitations](https://yar-solodovnikov.github.io/llm-cacher/guide/limitations#semantic-caching). |
+| `restoreLimit` | `number` | unlimited | Stop restoring after this many entries (in no particular order). |
 
 ### Storage classes
 
@@ -455,12 +515,24 @@ class MyStorage implements IStorage {
   async set(key: string, entry: CacheEntry): Promise<void> { ... }
   async delete(key: string): Promise<void> { ... }
   async clear(): Promise<void> { ... }
+  // optional — lets the semantic index be rebuilt after a restart
+  async *entries(): AsyncIterable<CacheEntry> { ... }
 }
 
 createCachedClient(client, { storage: new MyStorage() })
 ```
 
 ---
+
+## Limitations
+
+- **Only the main generation methods are cached:** OpenAI `chat.completions.create`, Anthropic `messages.create`, Gemini `models.generateContent` / `generateContentStream`, Mistral `chat.complete` / `chat.stream`. Everything else on the client — SDK helpers like Anthropic's `messages.stream()` or OpenAI's `chat.completions.parse()`, the Responses API, Gemini chat sessions — works as usual but uncached.
+- **Cached methods return plain data:** `create()` returns a plain `Promise`, not `APIPromise`, so `.withResponse()` / `.asResponse()` aren't available. Streams come back as an `AsyncGenerator` for `for await`, not as the SDK's `Stream` / `EventStream` (`.toReadableStream()`, `.tee()`, `.controller`, `.getReader()` aren't available).
+- **Hits are replayed as-is:** the original `id`, `created` and `usage` are returned. With `storage: 'memory'`, a hit is the same object that was cached, so mutating it changes the entry.
+- **Streams are cached only when fully consumed.** Identical concurrent requests all miss (no request coalescing).
+- **Semantic caching** indexes text-only prompts, and may serve an answer generated for another user's similar prompt — don't enable it for personalized prompts.
+
+Full details: [Limitations](https://yar-solodovnikov.github.io/llm-cacher/guide/limitations).
 
 ## License
 

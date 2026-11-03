@@ -1,4 +1,4 @@
-import { buildManager, buildCachedCreate } from './shared'
+import { buildManager, buildCachedCreate, passThrough } from './shared'
 import type { CacheManager } from '../core/CacheManager'
 import type { LlmCacheOptions } from './base'
 
@@ -12,20 +12,20 @@ export function createCachedClient<T extends object>(client: T, options: LlmCach
 
 export function createCachedClientFromManager<T extends object>(client: T, manager: CacheManager): T {
   return new Proxy(client, {
-    get(target, prop, receiver) {
-      if (prop !== OPENAI_CHAT_PROP) return Reflect.get(target, prop, receiver)
+    get(target, prop) {
+      if (prop !== OPENAI_CHAT_PROP) return passThrough(target, prop)
 
-      const chat = Reflect.get(target, prop, receiver) as Record<string, unknown>
+      const chat = Reflect.get(target, prop, target) as Record<string, unknown>
       return new Proxy(chat, {
-        get(chatTarget, chatProp, chatReceiver) {
-          if (chatProp !== OPENAI_COMPLETIONS_PROP) return Reflect.get(chatTarget, chatProp, chatReceiver)
+        get(chatTarget, chatProp) {
+          if (chatProp !== OPENAI_COMPLETIONS_PROP) return passThrough(chatTarget, chatProp)
 
-          const completions = Reflect.get(chatTarget, chatProp, chatReceiver) as Record<string, unknown>
+          const completions = Reflect.get(chatTarget, chatProp, chatTarget) as Record<string, unknown>
           return new Proxy(completions, {
-            get(compTarget, compProp, compReceiver) {
-              if (compProp !== OPENAI_CREATE_PROP) return Reflect.get(compTarget, compProp, compReceiver)
+            get(compTarget, compProp) {
+              if (compProp !== OPENAI_CREATE_PROP) return passThrough(compTarget, compProp)
 
-              const originalCreate = (Reflect.get(compTarget, compProp, compReceiver) as (...args: unknown[]) => unknown).bind(compTarget)
+              const originalCreate = (Reflect.get(compTarget, compProp, compTarget) as (...args: unknown[]) => unknown).bind(compTarget)
               return buildCachedCreate(originalCreate, manager)
             },
           })

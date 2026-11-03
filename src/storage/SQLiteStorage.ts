@@ -1,7 +1,8 @@
 import type { Database } from 'better-sqlite3'
 import type { CacheEntry, IStorage } from './IStorage'
-import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from './IStorage'
+import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM, isLiveEntry, parseEntry } from './IStorage'
 import { DEFAULT_SQLITE_PATH, DEFAULT_TABLE_NAME } from '../constants'
+import { requireOptional } from '../utils/optionalDeps'
 
 export interface SQLiteStorageOptions {
   path?: string
@@ -17,8 +18,7 @@ export class SQLiteStorage implements IStorage {
     if (opts.db) {
       this.db = opts.db
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const BetterSqlite3 = require('better-sqlite3') as typeof import('better-sqlite3')
+      const BetterSqlite3 = requireOptional('better-sqlite3') as typeof import('better-sqlite3')
       this.db = new BetterSqlite3(opts.path ?? DEFAULT_SQLITE_PATH)
     }
     const tableName = opts.tableName ?? DEFAULT_TABLE_NAME
@@ -70,6 +70,18 @@ export class SQLiteStorage implements IStorage {
 
   async clear(): Promise<void> {
     this.db.prepare(`DELETE FROM ${this.table}`).run()
+  }
+
+  async *entries(): AsyncIterable<CacheEntry> {
+    const now = Date.now()
+    // .all() rather than .iterate(): the connection must stay free while the consumer awaits
+    const rows = this.db
+      .prepare(`SELECT value FROM ${this.table} WHERE expires_at IS NULL OR expires_at >= ?`)
+      .all(now) as { value: string }[]
+    for (const row of rows) {
+      const entry = parseEntry(row.value)
+      if (entry && isLiveEntry(entry, now)) yield entry
+    }
   }
 
   close(): void {
