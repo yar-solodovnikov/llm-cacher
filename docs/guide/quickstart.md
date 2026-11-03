@@ -6,17 +6,17 @@
 npm install llm-cacher
 ```
 
-Install the storage backend you need â€” all are optional:
+Install the storage backend you need — all are optional:
 
 ```bash
 npm install ioredis              # Redis
 npm install better-sqlite3       # SQLite
 npm install @aws-sdk/client-dynamodb  # DynamoDB
 
-# Semantic caching â€” local model (no API key)
+# Semantic caching — local model (no API key)
 npm install @huggingface/transformers hnswlib-node
 
-# Semantic caching â€” OpenAI embeddings
+# Semantic caching — OpenAI embeddings
 npm install openai hnswlib-node
 ```
 
@@ -31,13 +31,13 @@ const openai = createCachedClient(new OpenAI(), {
   storage: 'memory',
 })
 
-// First call â€” hits the API
+// First call — hits the API
 const res1 = await openai.chat.completions.create({
   model: 'gpt-4o',
   messages: [{ role: 'user', content: 'What is 2+2?' }],
 })
 
-// Second identical call â€” served from cache instantly
+// Second identical call — served from cache instantly
 const res2 = await openai.chat.completions.create({
   model: 'gpt-4o',
   messages: [{ role: 'user', content: 'What is 2+2?' }],
@@ -122,9 +122,9 @@ for await (const event of await mistral.chat.stream({ model: 'mistral-large-late
 
 Every request is cached by a **SHA-256 hash** of the parameters (model, messages, temperature, etc.). The `stream` flag is excluded so streaming and non-streaming calls share the same entry. Attribution params that don't affect the answer — `user`, `safety_identifier`, `metadata`, `prompt_cache_key`, `store` (and Gemini's `config.labels`) — are excluded too, so a per-user id doesn't split the cache.
 
-- **Cache hit** â€” response returned immediately, no API call made.
-- **Cache miss** â€” request goes to the API, response is stored, then returned.
-- **Streaming** â€” chunks are accumulated and stored, then replayed as `AsyncGenerator` on cache hits.
+- **Cache hit** — response returned immediately, no API call made.
+- **Cache miss** — request goes to the API, response is stored, then returned.
+- **Streaming** — chunks are accumulated and stored, then replayed as `AsyncGenerator` on cache hits.
 
 ## Running the examples
 
