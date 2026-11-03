@@ -460,6 +460,8 @@ For `@mistralai/mistralai` — caches `chat.complete` and `chat.stream`.
 | `embedder` | `IEmbedder` | required | Embedding model to use. |
 | `threshold` | `number` | `0.92` | Minimum cosine similarity (0–1) to count as a cache hit. |
 | `indexType` | `'flat' \| 'hnsw'` | `'flat'` | Search index. Use `'hnsw'` for large caches (10k+ entries). |
+| `restore` | `boolean` | `true` | Rebuild the in-memory index from the storage on the first semantic lookup. Reads every stored entry once — see [Limitations](https://yar-solodovnikov.github.io/llm-cacher/guide/limitations#semantic-caching). |
+| `restoreLimit` | `number` | unlimited | Stop restoring after this many entries (in no particular order). |
 
 ### Storage classes
 

@@ -141,3 +141,29 @@ describe.each(backends)('%s.entries()', (_name, make) => {
     expect(await collect(storage)).toEqual([])
   })
 })
+
+describe('entries() stops fetching when the consumer stops', () => {
+  it('DynamoDBStorage does not request further Scan pages', async () => {
+    const client = makeDynamoClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const storage = new DynamoDBStorage({ tableName: 't', client: client as any })
+    for (const key of ['a', 'b', 'c', 'd']) await storage.set(key, makeEntry(key))
+    client.send.mockClear()
+
+    for await (const _ of storage.entries()) break
+
+    const scans = client.send.mock.calls.filter(([command]) => command.constructor.name === 'ScanCommand')
+    expect(scans).toHaveLength(1)
+  })
+
+  it('RedisStorage does not continue the SCAN', async () => {
+    const client = makeRedisClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const storage = new RedisStorage({ client: client as any })
+    for (const key of ['a', 'b', 'c', 'd']) await storage.set(key, makeEntry(key))
+
+    for await (const _ of storage.entries()) break
+
+    expect(client.scan).toHaveBeenCalledOnce()
+  })
+})

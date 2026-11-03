@@ -9,6 +9,11 @@ export interface SemanticOptions {
   embedder: IEmbedder
   threshold?: number
   indexType?: IndexType
+  // Rebuild the in-memory index from the storage on the first semantic lookup (default: true).
+  // This reads every stored entry once — a full Scan on DynamoDB.
+  restore?: boolean
+  // Stop restoring after this many entries. Backends return entries in no particular order.
+  restoreLimit?: number
 }
 
 export interface CacheManagerOptions {
@@ -28,11 +33,20 @@ export class CacheManager {
   private similarity: SimilarityEngine | null = null
   private embedder: IEmbedder | null = null
   private restorePromise: Promise<void> | null = null
+  private readonly restoreEnabled: boolean
+  private readonly restoreLimit: number
 
   constructor(options: CacheManagerOptions) {
     this.storage = options.storage
     this.ttlMs = options.ttl != null ? parseTTL(options.ttl) : null
     this.onStorageError = options.onStorageError ?? 'passthrough'
+
+    const restoreLimit = options.semantic?.restoreLimit
+    if (restoreLimit !== undefined && !(Number.isInteger(restoreLimit) && restoreLimit > 0)) {
+      throw new Error(`semantic.restoreLimit must be a positive integer, got ${restoreLimit}`)
+    }
+    this.restoreEnabled = options.semantic?.restore ?? true
+    this.restoreLimit = restoreLimit ?? Infinity
 
     if (options.semantic) {
       this.embedder = options.semantic.embedder
@@ -80,11 +94,15 @@ export class CacheManager {
   // rebuild it once from the embeddings stored with each entry, before the first semantic lookup.
   private restoreIndex(): Promise<void> {
     const { similarity, embedder, storage } = this
-    if (!similarity || !embedder || !storage.entries) return Promise.resolve()
+    if (!this.restoreEnabled || !similarity || !embedder || !storage.entries) return Promise.resolve()
     this.restorePromise ??= (async () => {
+      let restored = 0
       for await (const entry of storage.entries!()) {
         // vectors from a different embedder can't be compared with the current one
-        if (entry.embedding?.length === embedder.dimensions) similarity.add(entry.key, entry.embedding, entry.scope)
+        if (entry.embedding?.length !== embedder.dimensions) continue
+        similarity.add(entry.key, entry.embedding, entry.scope)
+        // leaving the loop ends the iterator, so remaining pages are never fetched
+        if (++restored >= this.restoreLimit) break
       }
     })().catch((err: unknown) => {
       this.restorePromise = null // retry on the next lookup

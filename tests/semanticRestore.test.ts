@@ -100,6 +100,64 @@ describe('CacheManager — semantic index survives a restart', () => {
   })
 })
 
+describe('CacheManager — restore options', () => {
+  // Storage whose entries() records how far the consumer pulled it
+  function trackedStorage(count: number, withEmbedding = (_i: number) => true) {
+    const pulled: string[] = []
+    const storage: IStorage = {
+      get: async () => null,
+      set: async () => undefined,
+      delete: async () => undefined,
+      clear: async () => undefined,
+      async *entries() {
+        for (let i = 0; i < count; i++) {
+          pulled.push(`k${i}`)
+          yield {
+            key: `k${i}`, type: 'full', value: i, createdAt: 0, expiresAt: null,
+            ...(withEmbedding(i) ? { embedding: [1, 0, 0] } : {}),
+          }
+        }
+      },
+    }
+    return { storage, pulled }
+  }
+
+  it('restore: false never reads the storage', async () => {
+    const { storage, pulled } = trackedStorage(5)
+    const manager = new CacheManager({ storage, semantic: { embedder: makeEmbedder(), threshold: 0.9, restore: false } })
+    expect(await manager.get('q', 'user: what is async/await?')).toBeNull()
+    expect(pulled).toEqual([])
+  })
+
+  it('restore: false still indexes entries written by this process', async () => {
+    const storage = new MemoryStorage({ sweepIntervalMs: 999_999 })
+    const manager = new CacheManager({ storage, semantic: { embedder: makeEmbedder(), threshold: 0.9, restore: false } })
+    await manager.set('key1', { type: 'full', value: 'cached' }, 'user: explain async/await')
+    expect((await manager.get('key2', 'user: what is async/await?'))?.value).toBe('cached')
+    storage.destroy()
+  })
+
+  it('restoreLimit stops reading the storage once the limit is reached', async () => {
+    const { storage, pulled } = trackedStorage(100)
+    const manager = new CacheManager({ storage, semantic: { embedder: makeEmbedder(), threshold: 0.9, restoreLimit: 3 } })
+    await manager.get('q', 'user: what is async/await?')
+    expect(pulled).toEqual(['k0', 'k1', 'k2'])
+  })
+
+  it('entries without an embedding do not count toward restoreLimit', async () => {
+    const { storage, pulled } = trackedStorage(100, i => i % 2 === 1)
+    const manager = new CacheManager({ storage, semantic: { embedder: makeEmbedder(), threshold: 0.9, restoreLimit: 2 } })
+    await manager.get('q', 'user: what is async/await?')
+    expect(pulled).toEqual(['k0', 'k1', 'k2', 'k3'])
+  })
+
+  it.each([0, -1, 1.5, NaN])('rejects restoreLimit = %s', (restoreLimit) => {
+    const { storage } = trackedStorage(0)
+    expect(() => new CacheManager({ storage, semantic: { embedder: makeEmbedder(), threshold: 0.9, restoreLimit } }))
+      .toThrow('restoreLimit')
+  })
+})
+
 describe('CacheManager — embedder failure on set', () => {
   const brokenEmbedder: IEmbedder = { dimensions: 3, embed: vi.fn().mockRejectedValue(new Error('embed failed')) }
 

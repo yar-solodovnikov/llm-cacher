@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `semantic.restore` (default `true`) and `semantic.restoreLimit` options to turn off or cap rebuilding the semantic index from storage — the rebuild reads every stored entry, a full `Scan` on DynamoDB
 - Limitations page in the docs (and a summary in the README): which methods are cached, plain return types instead of `APIPromise` / SDK stream classes, replayed `usage`, shared references with memory storage, stream and concurrency caveats, semantic caching privacy
 - `detectProvider(client)` and the `LlmProvider` type
 - `npm run test:dist` — smoke tests that load the built ESM and CJS bundles like a user's app (optional peer deps, `storage: 'sqlite'`, HNSW, semantic restore, Gemini hydration); runs in CI after the build

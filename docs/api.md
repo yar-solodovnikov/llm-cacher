@@ -58,6 +58,8 @@ const mistral = createCachedMistralClient(new Mistral({ apiKey }), { ttl: '24h' 
 | `embedder` | `IEmbedder` | required | The embedding model to use. |
 | `threshold` | `number` | `0.92` | Minimum cosine similarity (0â€“1) to count as a hit. |
 | `indexType` | `'flat' \| 'hnsw'` | `'flat'` | Search index. Use `'hnsw'` for 10k+ entries. |
+| `restore` | `boolean` | `true` | Rebuild the in-memory index from the storage on the first semantic lookup. Reads every stored entry once — see [Limitations](./guide/limitations#semantic-caching). |
+| `restoreLimit` | `number` | unlimited | Stop restoring after this many entries (in no particular order). |
 
 ## Storage classes
 

@@ -65,6 +65,18 @@ Each entry is stored together with its prompt embedding. The similarity index it
 
 Storing the vector adds roughly 8 KB per entry with `LocalEmbedder` (384 dims) and ~30 KB with `OpenAIEmbedder` (1536 dims).
 
+Restoring reads every stored entry once, so for a large cache the first semantic lookup is slower — and on DynamoDB it is a full table `Scan` billed as read capacity. Cap it or turn it off:
+
+```ts
+semantic: {
+  embedder: new LocalEmbedder(),
+  restoreLimit: 50_000, // stop after 50k entries — remaining Scan pages are not fetched
+  // restore: false,    // or don't rebuild at all; entries written from now on are still indexed
+}
+```
+
+With several instances sharing one storage (e.g. Redis behind a load balancer), each instance restores the index once, at its first semantic lookup. Entries that **other** instances write after that are not added to this instance's index — they are found by exact match only until it restarts.
+
 ## HNSW index for large caches
 
 ```bash

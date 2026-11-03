@@ -50,6 +50,8 @@ Identical requests issued at the same time all miss, and each one calls the API.
 - A semantic hit requires the same `model` and the same other parameters; only the prompt may differ. See [Scope](./semantic#scope-only-the-prompt-may-differ).
 - **Privacy.** A semantic hit serves an answer generated for a *different* prompt, which may come from a different user. Don't enable semantic caching for prompts that contain personal data, or use a separate storage or `keyPrefix` per user or tenant.
 - The similarity index is held in memory. After a restart it is rebuilt from the storage on the first semantic lookup. Entries written by llm-cacher versions without this feature have no stored embedding and are found by exact match only.
+- That rebuild reads **every stored entry once**: the first semantic lookup after a start is slower for a large cache, and on DynamoDB it is a full table `Scan` billed as read capacity. Use `semantic.restoreLimit` to cap it or `semantic.restore: false` to skip it.
+- **Several instances sharing one storage** don't see each other's new entries semantically. Each instance restores the index once, at its first semantic lookup; entries that other instances write after that are found by exact match only until this instance restarts.
 
 ## Framework integrations
 
