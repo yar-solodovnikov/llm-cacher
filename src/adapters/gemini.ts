@@ -11,8 +11,8 @@ const GEMINI_SDK_MODULE = '@google/genai'
 const GEMINI_TEXT_FIELD = 'contents'
 const DEFAULT_ROLE = 'user'
 
-// Transport-only config fields — must not split the cache key
-const NON_KEY_CONFIG_FIELDS = ['abortSignal', 'httpOptions'] as const
+// Transport-only and billing config fields — must not split the cache key
+const NON_KEY_CONFIG_FIELDS = ['abortSignal', 'httpOptions', 'labels'] as const
 
 type Params = Record<string, unknown>
 type Part = { text?: unknown }

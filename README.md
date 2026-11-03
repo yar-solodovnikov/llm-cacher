@@ -146,7 +146,7 @@ Both `chat.complete` and `chat.stream` are cached.
 
 ## How It Works
 
-Requests are cached by a **SHA-256 hash** of the request parameters (model, messages, temperature, etc.). The `stream` flag is excluded from the key so streaming and non-streaming calls share the same cache entry.
+Requests are cached by a **SHA-256 hash** of the request parameters (model, messages, temperature, etc.). The `stream` flag is excluded from the key so streaming and non-streaming calls share the same cache entry. Attribution params that don't affect the answer — `user`, `safety_identifier`, `metadata`, `prompt_cache_key`, `store` (and Gemini's `config.labels`) — are excluded too, so a per-user id doesn't split the cache.
 
 - **Cache hit**: the response is returned immediately without calling the LLM API.
 - **Cache miss**: the request goes to the API, the response is stored, then returned.

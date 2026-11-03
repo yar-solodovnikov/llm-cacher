@@ -57,6 +57,17 @@ export interface CachedMethodOptions {
 const identity: Hydrate = value => value
 const DEFAULT_TEXT_FIELD = 'messages'
 
+// Attribution / tracking params never change the generated answer, so they must not split
+// the cache — otherwise apps that pass a per-user id would get a separate cache per user.
+export const TRACKING_PARAMS = ['user', 'safety_identifier', 'metadata', 'prompt_cache_key', 'store'] as const
+
+function withoutTrackingParams(params: Params): Params {
+  if (!TRACKING_PARAMS.some(field => field in params)) return params
+  const rest = { ...params }
+  for (const field of TRACKING_PARAMS) delete rest[field]
+  return rest
+}
+
 // Semantic matches must not cross model or generation params: a prompt sent to another
 // model, or with different tools / response_format, can't reuse the cached answer.
 function semanticScope(keyParams: Params, textField: string): string {
@@ -77,7 +88,8 @@ export function buildCachedMethod(
   const textField = options.textField ?? DEFAULT_TEXT_FIELD
 
   return async (params: Params, ...rest: unknown[]) => {
-    const keyParams = options.keyParams ? options.keyParams(params) : params
+    const baseParams = withoutTrackingParams(params)
+    const keyParams = options.keyParams ? options.keyParams(baseParams) : baseParams
     const key = KeyBuilder.build(keyParams)
     const text = extractText(params)
     const scope = text !== undefined ? semanticScope(keyParams, textField) : undefined

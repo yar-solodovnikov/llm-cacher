@@ -120,7 +120,7 @@ for await (const event of await mistral.chat.stream({ model: 'mistral-large-late
 
 ## How it works
 
-Every request is cached by a **SHA-256 hash** of the parameters (model, messages, temperature, etc.). The `stream` flag is excluded so streaming and non-streaming calls share the same entry.
+Every request is cached by a **SHA-256 hash** of the parameters (model, messages, temperature, etc.). The `stream` flag is excluded so streaming and non-streaming calls share the same entry. Attribution params that don't affect the answer — `user`, `safety_identifier`, `metadata`, `prompt_cache_key`, `store` (and Gemini's `config.labels`) — are excluded too, so a per-user id doesn't split the cache.
 
 - **Cache hit** â€” response returned immediately, no API call made.
 - **Cache miss** â€” request goes to the API, response is stored, then returned.
