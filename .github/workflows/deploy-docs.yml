@@ -16,6 +16,9 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # onnxruntime-node (via @huggingface/transformers) downloads CUDA binaries from nuget.org on
+  # install; CI has no GPU and uses the bundled CPU build, so skip it — a nuget outage broke npm ci
+  ONNXRUNTIME_NODE_INSTALL: skip
 
 jobs:
   build:
