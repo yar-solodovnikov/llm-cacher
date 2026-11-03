@@ -93,7 +93,10 @@ describe('createCachedGeminiClient — generateContent', () => {
     const client = { files: { list: vi.fn() }, models: { generateContent: vi.fn(), generateContentStream: vi.fn(), countTokens: vi.fn() } }
     const cached = createCachedGeminiClient(client)
     expect(cached.files).toBe(client.files)
-    expect(cached.models.countTokens).toBe(client.models.countTokens)
+    cached.models.countTokens({ model: 'm' })
+    expect(client.models.countTokens).toHaveBeenCalledWith({ model: 'm' })
+    // uncached methods run against the original namespace, not the proxy
+    expect(client.models.countTokens.mock.contexts[0]).toBe(client.models)
   })
 })
 

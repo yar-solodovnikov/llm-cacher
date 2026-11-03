@@ -130,6 +130,18 @@ export function buildCachedCreate(
   return (params: Params, ...rest: unknown[]) => (params.stream ? stream(params, ...rest) : full(params, ...rest))
 }
 
+// Reads a property that is not cached. SDK helpers (e.g. Anthropic's messages.stream) call
+// sibling methods through `this` and rely on the SDK's own return types such as APIPromise —
+// bound to the original object they keep working, just without caching.
+export function passThrough(target: object, prop: string | symbol): unknown {
+  const value = Reflect.get(target, prop, target)
+  if (typeof value !== 'function') return value
+  // Proxy invariant: a non-configurable, read-only property must be returned as is
+  const descriptor = Object.getOwnPropertyDescriptor(target, prop)
+  if (descriptor && !descriptor.configurable && !descriptor.writable) return value
+  return value.bind(target)
+}
+
 // Proxies `client[namespace][method]` for each method in `wrappers`, passing everything else through
 export function wrapNamespaceMethods<T extends object>(
   client: T,
@@ -137,16 +149,16 @@ export function wrapNamespaceMethods<T extends object>(
   wrappers: Record<string, (original: OriginalMethod) => (params: Params, ...rest: unknown[]) => unknown>,
 ): T {
   return new Proxy(client, {
-    get(target, prop, receiver) {
-      if (prop !== namespace) return Reflect.get(target, prop, receiver)
+    get(target, prop) {
+      if (prop !== namespace) return passThrough(target, prop)
 
-      const ns = Reflect.get(target, prop, receiver) as Record<string, unknown>
+      const ns = Reflect.get(target, prop, target) as Record<string, unknown>
       return new Proxy(ns, {
-        get(nsTarget, nsProp, nsReceiver) {
+        get(nsTarget, nsProp) {
           const wrap = typeof nsProp === 'string' && Object.prototype.hasOwnProperty.call(wrappers, nsProp) ? wrappers[nsProp] : undefined
-          if (!wrap) return Reflect.get(nsTarget, nsProp, nsReceiver)
+          if (!wrap) return passThrough(nsTarget, nsProp)
 
-          const original = (Reflect.get(nsTarget, nsProp, nsReceiver) as OriginalMethod).bind(nsTarget)
+          const original = (Reflect.get(nsTarget, nsProp, nsTarget) as OriginalMethod).bind(nsTarget)
           return wrap(original)
         },
       })

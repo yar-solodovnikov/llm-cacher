@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@google/genai` and `@mistralai/mistralai` as optional peer dependencies
 
 ### Fixed
+- Anthropic `messages.stream()` threw `withResponse is not a function` on a cached client: SDK helper methods were called with the proxy as `this` and reached the cached `create()`, which returns a plain Promise. Methods that are not cached are now bound to the original SDK object, so helpers (`messages.stream()`, OpenAI `chat.completions.parse()` / `stream()` / `runTools()`, …) work as in the plain SDK — uncached
 - Express / Hono / NestJS integrations always applied the OpenAI adapter, so an Anthropic client passed to `withCache` / `wrap` was silently left uncached. They now detect the SDK (OpenAI, Anthropic, Gemini, Mistral) from the client's shape, accept an explicit provider as a second argument, and throw for unrecognized clients
 - Semantic index is rebuilt after a restart. It lived only in memory, so with a persistent backend (SQLite, file, Redis, DynamoDB) previously cached entries were reachable by exact match only. Entries now store their embedding and scope, and `CacheManager` restores the index from the new optional `IStorage.entries()` (implemented by all built-in backends) on the first semantic lookup
 - An embedder failure in `CacheManager.set()` no longer depends on write order — the response is always cached for exact matches before the error is reported
