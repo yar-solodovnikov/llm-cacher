@@ -2,6 +2,8 @@ export { createCachedClient } from './adapters/openai'
 export { createCachedAnthropicClient } from './adapters/anthropic'
 export { createCachedGeminiClient } from './adapters/gemini'
 export { createCachedMistralClient } from './adapters/mistral'
+export { detectProvider } from './adapters/auto'
+export type { LlmProvider } from './adapters/auto'
 export type { LlmCacheOptions } from './adapters/base'
 
 export { MemoryStorage } from './storage/MemoryStorage'

@@ -283,6 +283,8 @@ Embeddings are stored with each entry, so after a restart the semantic index is 
 
 ## Framework Integrations
 
+`withCache` / `wrap` accept an OpenAI, Anthropic, Gemini or Mistral client — the SDK is detected from the client's shape (pass `'openai' | 'anthropic' | 'gemini' | 'mistral'` as the second argument to set it explicitly). A client that matches no supported SDK throws instead of being passed through uncached.
+
 ### Express
 
 ```ts

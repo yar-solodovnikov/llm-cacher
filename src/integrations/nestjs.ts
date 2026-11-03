@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { Module, Injectable, Inject, type DynamicModule } from '@nestjs/common'
-import { createCachedClientFromManager } from '../adapters/openai'
+import { createCachedClientForProvider, type LlmProvider } from '../adapters/auto'
 import { buildManager } from '../adapters/shared'
 import type { CacheManager } from '../core/CacheManager'
 import type { LlmCacheOptions } from '../adapters/base'
@@ -16,15 +16,16 @@ export class LlmCacheService {
   }
 
   /**
-   * Wraps any LLM client (OpenAI, Anthropic, etc.) with caching.
+   * Wraps an OpenAI, Anthropic, Gemini or Mistral client with caching. The SDK is detected
+   * from the client's shape; pass `provider` to set it explicitly.
    * All wrapped clients share the same CacheManager instance.
    *
    * @example
    * const openai = this.llmCache.wrap(new OpenAI())
-   * const response = await openai.chat.completions.create({ ... })
+   * const anthropic = this.llmCache.wrap(new Anthropic())
    */
-  wrap<T extends object>(client: T): T {
-    return createCachedClientFromManager(client, this.manager)
+  wrap<T extends object>(client: T, provider?: LlmProvider): T {
+    return createCachedClientForProvider(client, this.manager, provider)
   }
 }
 

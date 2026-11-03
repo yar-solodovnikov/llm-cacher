@@ -8,12 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `detectProvider(client)` and the `LlmProvider` type
 - `npm run test:dist` — smoke tests that load the built ESM and CJS bundles like a user's app (optional peer deps, `storage: 'sqlite'`, HNSW, semantic restore, Gemini hydration); runs in CI after the build
 - `createCachedGeminiClient` — caches `models.generateContent` and `models.generateContentStream` of `@google/genai`; cached responses are restored as `GenerateContentResponse` so `.text` and other getters survive serializing storage backends; `config.httpOptions` / `config.abortSignal` are excluded from the cache key; semantic text includes `config.systemInstruction`
 - `createCachedMistralClient` — caches `chat.complete` and `chat.stream` of `@mistralai/mistralai`
 - `@google/genai` and `@mistralai/mistralai` as optional peer dependencies
 
 ### Fixed
+- Express / Hono / NestJS integrations always applied the OpenAI adapter, so an Anthropic client passed to `withCache` / `wrap` was silently left uncached. They now detect the SDK (OpenAI, Anthropic, Gemini, Mistral) from the client's shape, accept an explicit provider as a second argument, and throw for unrecognized clients
 - Semantic index is rebuilt after a restart. It lived only in memory, so with a persistent backend (SQLite, file, Redis, DynamoDB) previously cached entries were reachable by exact match only. Entries now store their embedding and scope, and `CacheManager` restores the index from the new optional `IStorage.entries()` (implemented by all built-in backends) on the first semantic lookup
 - An embedder failure in `CacheManager.set()` no longer depends on write order — the response is always cached for exact matches before the error is reported
 - HNSW index grows (doubles `maxElements`) when full; previously `addPoint` threw past 100 000 entries and, with `onStorageError: 'passthrough'`, new entries silently stopped being semantically indexed
