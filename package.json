@@ -6,7 +6,7 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "llm-cacher": "./dist/cli.cjs"
+    "llm-cacher": "dist/cli.cjs"
   },
   "exports": {
     ".": {
@@ -39,7 +39,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:dist": "node tests/smoke/smoke.mjs && node tests/smoke/smoke.cjs",
+    "test:dist": "node tests/smoke/smoke.mjs && node tests/smoke/smoke.cjs && node tests/smoke/package.mjs",
     "lint": "eslint src tests",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
