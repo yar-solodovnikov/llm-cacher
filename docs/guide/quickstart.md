@@ -62,6 +62,62 @@ const msg = await anthropic.messages.create({
 })
 ```
 
+## Gemini
+
+```bash
+npm install @google/genai
+```
+
+```ts
+import { GoogleGenAI } from '@google/genai'
+import { createCachedGeminiClient } from 'llm-cacher'
+
+const ai = createCachedGeminiClient(new GoogleGenAI({}), {
+  ttl: '24h',
+  storage: 'sqlite',
+})
+
+const res = await ai.models.generateContent({
+  model: 'gemini-2.5-flash',
+  contents: 'Hello!',
+})
+console.log(res.text)
+
+// Streaming is cached too
+for await (const chunk of await ai.models.generateContentStream({ model: 'gemini-2.5-flash', contents: 'Hello!' })) {
+  process.stdout.write(chunk.text ?? '')
+}
+```
+
+Cached responses are restored as `GenerateContentResponse` instances, so `.text`, `.functionCalls` and the other getters work on cache hits from any storage backend. `config.httpOptions` and `config.abortSignal` are not part of the cache key.
+
+## Mistral
+
+```bash
+npm install @mistralai/mistralai
+```
+
+```ts
+import { Mistral } from '@mistralai/mistralai'
+import { createCachedMistralClient } from 'llm-cacher'
+
+const mistral = createCachedMistralClient(new Mistral({ apiKey: process.env.MISTRAL_API_KEY }), {
+  ttl: '24h',
+  storage: 'sqlite',
+})
+
+const res = await mistral.chat.complete({
+  model: 'mistral-large-latest',
+  messages: [{ role: 'user', content: 'Hello!' }],
+})
+
+for await (const event of await mistral.chat.stream({ model: 'mistral-large-latest', messages: [{ role: 'user', content: 'Hello!' }] })) {
+  process.stdout.write(String(event.data.choices[0]?.delta.content ?? ''))
+}
+```
+
+`chat.stream()` returns an async iterable you consume with `for await` — the `ReadableStream` methods of the original `EventStream` are not available on the cached result.
+
 ## How it works
 
 Every request is cached by a **SHA-256 hash** of the parameters (model, messages, temperature, etc.). The `stream` flag is excluded so streaming and non-streaming calls share the same entry.

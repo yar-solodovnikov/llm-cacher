@@ -5,7 +5,7 @@
 [![license](https://img.shields.io/npm/l/llm-cacher.svg)](https://github.com/yar-solodovnikov/llm-cacher/blob/main/LICENSE)
 [![CI](https://github.com/yar-solodovnikov/llm-cacher/actions/workflows/ci.yml/badge.svg)](https://github.com/yar-solodovnikov/llm-cacher/actions/workflows/ci.yml)
 
-Cache LLM responses with **exact** and **semantic** matching. Works with OpenAI, Anthropic, and any SDK that follows a similar API shape. Supports in-memory, file, Redis, SQLite, and DynamoDB storage backends.
+Cache LLM responses with **exact** and **semantic** matching. Works with OpenAI, Anthropic, Gemini, Mistral, and any SDK that follows a similar API shape. Supports in-memory, file, Redis, SQLite, and DynamoDB storage backends.
 
 ## Table of Contents
 
@@ -48,6 +48,10 @@ npm install @huggingface/transformers
 
 # Semantic caching with OpenAI embeddings
 npm install openai
+
+# Gemini / Mistral adapters — install the SDK you use
+npm install @google/genai
+npm install @mistralai/mistralai
 
 # HNSW index (only needed for 10 000+ cached entries)
 npm install hnswlib-node
@@ -98,6 +102,45 @@ const msg = await anthropic.messages.create({
   messages: [{ role: 'user', content: 'Hello!' }],
 })
 ```
+
+### Gemini
+
+```ts
+import { GoogleGenAI } from '@google/genai'
+import { createCachedGeminiClient } from 'llm-cacher'
+
+const ai = createCachedGeminiClient(new GoogleGenAI({}), {
+  ttl: '24h',
+  storage: 'sqlite',
+})
+
+const res = await ai.models.generateContent({
+  model: 'gemini-2.5-flash',
+  contents: 'Hello!',
+})
+console.log(res.text) // getters work on cache hits too
+```
+
+Both `generateContent` and `generateContentStream` are cached.
+
+### Mistral
+
+```ts
+import { Mistral } from '@mistralai/mistralai'
+import { createCachedMistralClient } from 'llm-cacher'
+
+const mistral = createCachedMistralClient(new Mistral({ apiKey: process.env.MISTRAL_API_KEY }), {
+  ttl: '24h',
+  storage: 'sqlite',
+})
+
+const res = await mistral.chat.complete({
+  model: 'mistral-large-latest',
+  messages: [{ role: 'user', content: 'Hello!' }],
+})
+```
+
+Both `chat.complete` and `chat.stream` are cached.
 
 ---
 
@@ -383,6 +426,14 @@ Wraps any OpenAI-compatible client with caching. Returns a `Proxy` with the same
 ### `createCachedAnthropicClient(client, options?)`
 
 Same as above but for Anthropic's `messages.create`.
+
+### `createCachedGeminiClient(client, options?)`
+
+For `@google/genai` — caches `models.generateContent` and `models.generateContentStream`. Cached responses are restored as `GenerateContentResponse` instances. `config.httpOptions` and `config.abortSignal` are excluded from the cache key.
+
+### `createCachedMistralClient(client, options?)`
+
+For `@mistralai/mistralai` — caches `chat.complete` and `chat.stream`.
 
 ### `LlmCacheOptions`
 

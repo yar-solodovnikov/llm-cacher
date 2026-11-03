@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `createCachedGeminiClient` — caches `models.generateContent` and `models.generateContentStream` of `@google/genai`; cached responses are restored as `GenerateContentResponse` so `.text` and other getters survive serializing storage backends; `config.httpOptions` / `config.abortSignal` are excluded from the cache key; semantic text includes `config.systemInstruction`
+- `createCachedMistralClient` — caches `chat.complete` and `chat.stream` of `@mistralai/mistralai`
+- `@google/genai` and `@mistralai/mistralai` as optional peer dependencies
+
+### Fixed
+- Adapters now forward the second argument of the wrapped method (request options such as `signal` or `timeout`) to the SDK instead of dropping it
+
 ## [1.0.7] - 2026-05-18
 
 ### Fixed

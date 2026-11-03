@@ -4,7 +4,7 @@ layout: home
 hero:
   name: llm-cacher
   text: Cache LLM responses
-  tagline: Exact and semantic matching for OpenAI, Anthropic, and more. Cut costs, reduce latency.
+  tagline: Exact and semantic matching for OpenAI, Anthropic, Gemini, Mistral, and more. Cut costs, reduce latency.
   actions:
     - theme: brand
       text: Get Started
