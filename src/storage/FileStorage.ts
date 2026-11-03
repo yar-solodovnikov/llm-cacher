@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import type { CacheEntry, IStorage } from './IStorage'
-import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM } from './IStorage'
+import { ENTRY_TYPE_FULL, ENTRY_TYPE_STREAM, isLiveEntry } from './IStorage'
 import { FILE_ENCODING } from '../constants'
 
 export interface FileStorageOptions {
@@ -59,5 +59,12 @@ export class FileStorage implements IStorage {
 
   async clear(): Promise<void> {
     this.write({})
+  }
+
+  async *entries(): AsyncIterable<CacheEntry> {
+    const now = Date.now()
+    for (const entry of Object.values(this.read())) {
+      if (entry != null && isLiveEntry(entry, now)) yield entry
+    }
   }
 }

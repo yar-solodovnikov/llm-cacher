@@ -275,7 +275,9 @@ createCachedClient(client, {
 })
 ```
 
-`indexType: 'hnsw'` is recommended when you expect more than ~10 000 cached entries.
+`indexType: 'hnsw'` is recommended when you expect more than ~10 000 cached entries. The index grows automatically when it fills up.
+
+Embeddings are stored with each entry, so after a restart the semantic index is rebuilt from a persistent backend (SQLite, file, Redis, DynamoDB) on the first semantic lookup.
 
 ---
 
@@ -508,6 +510,8 @@ class MyStorage implements IStorage {
   async set(key: string, entry: CacheEntry): Promise<void> { ... }
   async delete(key: string): Promise<void> { ... }
   async clear(): Promise<void> { ... }
+  // optional — lets the semantic index be rebuilt after a restart
+  async *entries(): AsyncIterable<CacheEntry> { ... }
 }
 
 createCachedClient(client, { storage: new MyStorage() })

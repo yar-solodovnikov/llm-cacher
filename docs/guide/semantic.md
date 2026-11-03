@@ -59,6 +59,12 @@ createCachedClient(client, {
 })
 ```
 
+## Persistence across restarts
+
+Each entry is stored together with its prompt embedding. The similarity index itself lives in memory, so after a restart it is rebuilt from the storage on the first semantic lookup (via `IStorage.entries()`, implemented by all built-in backends). Entries whose vectors come from an embedder with different dimensions are skipped.
+
+Storing the vector adds roughly 8 KB per entry with `LocalEmbedder` (384 dims) and ~30 KB with `OpenAIEmbedder` (1536 dims).
+
 ## HNSW index for large caches
 
 ```bash

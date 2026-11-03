@@ -27,6 +27,7 @@ export class CacheManager {
   private onStorageError: StorageErrorStrategy
   private similarity: SimilarityEngine | null = null
   private embedder: IEmbedder | null = null
+  private restorePromise: Promise<void> | null = null
 
   constructor(options: CacheManagerOptions) {
     this.storage = options.storage
@@ -57,6 +58,7 @@ export class CacheManager {
 
       // 2. semantic match
       if (text && this.embedder && this.similarity) {
+        await this.restoreIndex()
         const embedding = await this.embedder.embed(text)
         const similarKey = this.similarity.findSimilar(embedding, scope)
         if (similarKey) {
@@ -74,20 +76,48 @@ export class CacheManager {
     }
   }
 
+  // The similarity index lives in memory while persistent backends outlive the process —
+  // rebuild it once from the embeddings stored with each entry, before the first semantic lookup.
+  private restoreIndex(): Promise<void> {
+    const { similarity, embedder, storage } = this
+    if (!similarity || !embedder || !storage.entries) return Promise.resolve()
+    this.restorePromise ??= (async () => {
+      for await (const entry of storage.entries!()) {
+        // vectors from a different embedder can't be compared with the current one
+        if (entry.embedding?.length === embedder.dimensions) similarity.add(entry.key, entry.embedding, entry.scope)
+      }
+    })().catch((err: unknown) => {
+      this.restorePromise = null // retry on the next lookup
+      throw err
+    })
+    return this.restorePromise
+  }
+
   async set(key: string, data: Pick<CacheEntry, 'type' | 'value' | 'chunks'>, text?: string, scope?: string): Promise<void> {
     try {
+      // Embed first so the vector is persisted with the entry; an embedder failure must
+      // still leave the response cached for exact matches.
+      let embedding: number[] | undefined
+      let embedError: unknown
+      if (text && this.embedder && this.similarity) {
+        try {
+          embedding = await this.embedder.embed(text)
+        } catch (err) {
+          embedError = err
+        }
+      }
+
       const now = Date.now()
       await this.storage.set(key, {
         key,
         ...data,
         createdAt: now,
         expiresAt: this.ttlMs != null ? now + this.ttlMs : null,
+        ...(embedding ? { embedding, scope } : {}),
       })
 
-      if (text && this.embedder && this.similarity) {
-        const embedding = await this.embedder.embed(text)
-        this.similarity.add(key, embedding, scope)
-      }
+      if (embedding) this.similarity?.add(key, embedding, scope)
+      if (embedError) throw embedError
     } catch (err) {
       if (this.onStorageError === 'passthrough') return
       throw err

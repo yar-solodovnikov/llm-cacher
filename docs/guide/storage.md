@@ -149,6 +149,8 @@ class MyStorage implements IStorage {
   async set(key: string, entry: CacheEntry): Promise<void> { ... }
   async delete(key: string): Promise<void> { ... }
   async clear(): Promise<void> { ... }
+  // optional — lets the semantic index be rebuilt after a restart
+  async *entries(): AsyncIterable<CacheEntry> { ... }
 }
 
 createCachedClient(client, { storage: new MyStorage() })
