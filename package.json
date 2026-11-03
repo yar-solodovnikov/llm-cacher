@@ -39,6 +39,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:dist": "node tests/smoke/smoke.mjs && node tests/smoke/smoke.cjs",
     "lint": "eslint src tests",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",

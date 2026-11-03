@@ -33,6 +33,17 @@ export default tseslint.config(
     },
   },
   {
+    // smoke tests run the built package directly under Node
+    files: ["tests/smoke/**"],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly", require: "readonly" },
+    },
+    rules: {
+      "@typescript-eslint/no-magic-numbers": "off",
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
     ignores: ["dist/**", "node_modules/**", "eslint.config.js"],
   },
 );

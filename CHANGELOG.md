@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `npm run test:dist` — smoke tests that load the built ESM and CJS bundles like a user's app (optional peer deps, `storage: 'sqlite'`, HNSW, semantic restore, Gemini hydration); runs in CI after the build
 - `createCachedGeminiClient` — caches `models.generateContent` and `models.generateContentStream` of `@google/genai`; cached responses are restored as `GenerateContentResponse` so `.text` and other getters survive serializing storage backends; `config.httpOptions` / `config.abortSignal` are excluded from the cache key; semantic text includes `config.systemInstruction`
 - `createCachedMistralClient` — caches `chat.complete` and `chat.stream` of `@mistralai/mistralai`
 - `@google/genai` and `@mistralai/mistralai` as optional peer dependencies

@@ -26,6 +26,8 @@ jobs:
 
       - run: npm run build
 
+      - run: npm run test:dist
+
   integration:
     runs-on: ubuntu-latest
 
